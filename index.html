@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dynasty Dashboard — Bricklaying Operations</title>
+  <link rel="stylesheet" href="styles.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+
+  <!-- ===== HEADER ===== -->
+  <header class="site-header">
+    <div class="header-inner">
+      <div class="brand">
+        <div class="brand-icon">&#9632;</div>
+        <div>
+          <h1 class="brand-name">DYNASTY</h1>
+          <span class="brand-sub">Bricklaying Operations</span>
+        </div>
+      </div>
+      <div class="header-right">
+        <span class="last-updated" id="lastUpdated">Last updated: —</span>
+        <button class="btn-refresh" id="btnRefresh" title="Refresh data">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- ===== TAB NAV ===== -->
+  <nav class="tab-nav" aria-label="Job site navigation">
+    <div class="tab-bar" id="tabBar">
+      <!-- built dynamically by app.js -->
+    </div>
+  </nav>
+
+  <!-- ===== MAIN CONTENT ===== -->
+  <main class="main">
+
+    <!-- ======================================================
+         ALL JOBS VIEW
+         ====================================================== -->
+    <div id="viewAll">
+
+      <!-- Overview KPIs -->
+      <section class="kpi-grid">
+
+        <div class="kpi-card">
+          <div class="kpi-icon kpi-icon--bricks">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><rect x="1" y="7" width="10" height="5" rx="1"/><rect x="13" y="7" width="10" height="5" rx="1"/><rect x="4" y="13" width="10" height="5" rx="1"/><rect x="16" y="13" width="7" height="5" rx="1"/><rect x="1" y="13" width="1" height="5" rx="0.5"/></svg>
+          </div>
+          <div class="kpi-body">
+            <div class="kpi-value" id="ovTotalBricks">—</div>
+            <div class="kpi-label">Total Bricks Today</div>
+          </div>
+        </div>
+
+        <div class="kpi-card">
+          <div class="kpi-icon kpi-icon--crew">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="7" r="3"/><circle cx="17" cy="8" r="2.5"/><path d="M1 20c0-4 3.6-7 8-7s8 3 8 7"/><path d="M17 14c2.7 0 5 2 5 5"/></svg>
+          </div>
+          <div class="kpi-body">
+            <div class="kpi-value" id="ovTotalCrew">—</div>
+            <div class="kpi-label">Total Crew on Site</div>
+          </div>
+        </div>
+
+        <div class="kpi-card">
+          <div class="kpi-icon kpi-icon--sites">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+          </div>
+          <div class="kpi-body">
+            <div class="kpi-value" id="ovActiveSites">—</div>
+            <div class="kpi-label">Active Job Sites</div>
+          </div>
+        </div>
+
+        <div class="kpi-card kpi-card--problems" id="ovProblemsCard">
+          <div class="kpi-icon kpi-icon--problems">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13" stroke="#0a0a0a" stroke-width="2"/><line x1="12" y1="17" x2="12.01" y2="17" stroke="#0a0a0a" stroke-width="2"/></svg>
+          </div>
+          <div class="kpi-body">
+            <div class="kpi-value" id="ovTotalProblems">—</div>
+            <div class="kpi-label">Problems Flagged</div>
+          </div>
+        </div>
+
+      </section>
+
+      <!-- Site summary cards -->
+      <div class="site-cards-grid" id="siteCardsGrid">
+        <!-- built dynamically -->
+      </div>
+
+      <!-- Weekly & monthly summary -->
+      <section class="weekly-summary" id="weeklySummary"></section>
+
+    </div><!-- /#viewAll -->
+
+
+    <!-- ======================================================
+         SINGLE SITE VIEW
+         ====================================================== -->
+    <div id="viewSite" hidden>
+
+      <!-- Site label -->
+      <div class="job-label" id="jobLabel">—</div>
+
+      <!-- Boss note -->
+      <div class="boss-note" id="bossNote" hidden>
+        <div class="boss-note-icon">&#9733;</div>
+        <div class="boss-note-body">
+          <div class="boss-note-label">Boss needs to know</div>
+          <div class="boss-note-text" id="bossNoteText"></div>
+        </div>
+      </div>
+
+      <!-- KPI Cards -->
+      <section class="kpi-grid">
+
+        <div class="kpi-card">
+          <div class="kpi-icon kpi-icon--bricks">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><rect x="1" y="7" width="10" height="5" rx="1"/><rect x="13" y="7" width="10" height="5" rx="1"/><rect x="4" y="13" width="10" height="5" rx="1"/><rect x="16" y="13" width="7" height="5" rx="1"/><rect x="1" y="13" width="1" height="5" rx="0.5"/></svg>
+          </div>
+          <div class="kpi-body">
+            <div class="kpi-value" id="kpiBricks">—</div>
+            <div class="kpi-label">Bricks / Blocks Today</div>
+          </div>
+          <div class="kpi-trend" id="kpiBricksTrend"></div>
+        </div>
+
+        <div class="kpi-card">
+          <div class="kpi-icon kpi-icon--crew">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="7" r="3"/><circle cx="17" cy="8" r="2.5"/><path d="M1 20c0-4 3.6-7 8-7s8 3 8 7"/><path d="M17 14c2.7 0 5 2 5 5"/></svg>
+          </div>
+          <div class="kpi-body">
+            <div class="kpi-value" id="kpiCrew">—</div>
+            <div class="kpi-label">Crew on Site</div>
+          </div>
+        </div>
+
+        <div class="kpi-card kpi-card--progress">
+          <div class="kpi-icon kpi-icon--progress">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>
+          </div>
+          <div class="kpi-body">
+            <div class="kpi-value" id="kpiProgress">—</div>
+            <div class="kpi-label">Job Progress</div>
+            <div class="progress-bar-wrap">
+              <div class="progress-bar" id="progressBar"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="kpi-card">
+          <div class="kpi-icon kpi-icon--days">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+          </div>
+          <div class="kpi-body">
+            <div class="kpi-value" id="kpiDays">—</div>
+            <div class="kpi-label">Est. Days Remaining</div>
+          </div>
+        </div>
+
+        <div class="kpi-card">
+          <div class="kpi-icon kpi-icon--total">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
+          </div>
+          <div class="kpi-body">
+            <div class="kpi-value" id="kpiTotal">—</div>
+            <div class="kpi-label">Running Job Total</div>
+          </div>
+        </div>
+
+        <div class="kpi-card kpi-card--problems" id="problemsCard">
+          <div class="kpi-icon kpi-icon--problems">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13" stroke="#0a0a0a" stroke-width="2"/><line x1="12" y1="17" x2="12.01" y2="17" stroke="#0a0a0a" stroke-width="2"/></svg>
+          </div>
+          <div class="kpi-body">
+            <div class="kpi-value" id="kpiProblems">—</div>
+            <div class="kpi-label">Problems Flagged</div>
+          </div>
+        </div>
+
+      </section>
+
+      <!-- Site averages -->
+      <section class="site-averages" id="siteAverages"></section>
+
+      <!-- Info row -->
+      <section class="info-row">
+
+        <div class="info-card">
+          <h2 class="card-title">
+            <span class="card-title-icon">&#10003;</span> What Got Done Today
+          </h2>
+          <div class="done-today" id="doneTodayText">No data loaded</div>
+        </div>
+
+        <div class="info-card">
+          <h2 class="card-title">
+            <span class="card-title-icon">&#9888;</span> Active Problems
+          </h2>
+          <ul class="problem-list" id="problemList">
+            <li class="problem-item problem-item--empty">No data loaded</li>
+          </ul>
+        </div>
+
+        <div class="info-card">
+          <h2 class="card-title">
+            <span class="card-title-icon">&#128230;</span> Materials Needed Tomorrow
+          </h2>
+          <ul class="materials-list" id="materialsList">
+            <li class="materials-item materials-item--empty">No data loaded</li>
+          </ul>
+        </div>
+
+      </section>
+
+      <!-- Charts -->
+      <section class="charts-row">
+        <div class="chart-card">
+          <h2 class="card-title">Daily Bricks / Blocks Laid</h2>
+          <div class="chart-wrap"><canvas id="chartBricks"></canvas></div>
+        </div>
+        <div class="chart-card">
+          <h2 class="card-title">Job Progress Over Time</h2>
+          <div class="chart-wrap"><canvas id="chartProgress"></canvas></div>
+        </div>
+      </section>
+
+      <section class="chart-card chart-card--full">
+        <h2 class="card-title">Crew on Site — Weekly View</h2>
+        <div class="chart-wrap chart-wrap--wide"><canvas id="chartCrew"></canvas></div>
+      </section>
+
+      <!-- Data table -->
+      <section class="table-card">
+        <h2 class="card-title">Daily Log</h2>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Bricks Today</th>
+                <th>Running Total</th>
+                <th>Crew</th>
+                <th>Progress</th>
+                <th>Days Left</th>
+                <th>Problems</th>
+                <th>Materials Tomorrow</th>
+              </tr>
+            </thead>
+            <tbody id="tableBody">
+              <tr><td colspan="8" class="table-empty">Loading data…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+    </div><!-- /#viewSite -->
+
+  </main>
+
+  <footer class="site-footer">
+    <span>Dynasty Bricklaying Operations Dashboard</span>
+    <span class="footer-sep">|</span>
+    <span>Data sourced from Google Sheets</span>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
