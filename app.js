@@ -5,11 +5,80 @@
 
 'use strict';
 
+// ─── PIN storage (module-level so settings can update them) ──────────────────
+const PIN_KEY        = 'dynasty-pin';
+const PORTAL_PIN_KEY = 'dynasty-portal-pin';
+let currentFullPin   = localStorage.getItem(PIN_KEY)        || '1234';
+const PORTAL_PIN     = localStorage.getItem(PORTAL_PIN_KEY) || '9999';
+
+function isPortal() {
+  return sessionStorage.getItem('dynasty-mode') === 'portal';
+}
+
+// ─── PIN Authentication ───────────────────────────────────────────────────────
+(function initAuth() {
+  const AUTH_KEY    = 'dynasty-auth';
+  const loginScreen = document.getElementById('loginScreen');
+  const dashboard   = document.getElementById('dashboardRoot');
+  const pinInput    = document.getElementById('pinInput');
+  const loginBtn    = document.getElementById('loginBtn');
+  const loginError  = document.getElementById('loginError');
+
+  function unlock(mode) {
+    sessionStorage.setItem(AUTH_KEY, '1');
+    sessionStorage.setItem('dynasty-mode', mode);
+    loginScreen.style.display = 'none';
+    dashboard.hidden = false;
+    if (mode === 'portal') {
+      const wm = document.getElementById('portalWatermark');
+      if (wm) wm.hidden = false;
+    }
+  }
+
+  // Already authenticated this session
+  if (sessionStorage.getItem(AUTH_KEY) === '1') {
+    loginScreen.style.display = 'none';
+    dashboard.hidden = false;
+    if (isPortal()) {
+      const wm = document.getElementById('portalWatermark');
+      if (wm) wm.hidden = false;
+    }
+    return;
+  }
+
+  function attempt() {
+    const pin = pinInput.value;
+    if (pin === currentFullPin) {
+      loginError.hidden = true;
+      unlock('full');
+    } else if (pin === PORTAL_PIN) {
+      loginError.hidden = true;
+      unlock('portal');
+    } else {
+      loginError.hidden = false;
+      pinInput.value = '';
+      pinInput.focus();
+    }
+  }
+
+  loginBtn.addEventListener('click', attempt);
+  pinInput.addEventListener('keydown', e => { if (e.key === 'Enter') attempt(); });
+})();
+
 // ─── Sheet URL ────────────────────────────────────────────────────────────────
 const SHEET_CSV_URL =
   'https://docs.google.com/spreadsheets/d/e/2PACX-1vTvsSIicwnMasEr8OQIilHtmjC0PAAgGh4WHxB3yJMNPv8feICE5MM97xFz6G0OTkpjWs7EZheqtB8G/pub?output=csv';
 
-const CORS_PROXY = 'https://api.allorigins.win/raw?url=';
+// ServiceM8 API
+const SM8_URL     = 'https://api.servicem8.com/api_1.0/job.json';
+const SM8_API_KEY = 'smk-aa87cc-9a9a0a802a22e535-394394c0f2a1d836';
+
+// Ordered list of CORS proxies tried in sequence until one returns valid CSV
+const CORS_PROXIES = [
+  url => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+  url => `https://corsproxy.io/?${encodeURIComponent(url)}`,
+  url => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
+];
 
 // Column mapping (0-indexed):
 // A[0]=Timestamp, B[1]=Date, C[2]=Job Site, D[3]=Crew, E[4]=Bricks Today,
@@ -17,11 +86,46 @@ const CORS_PROXY = 'https://api.allorigins.win/raw?url=';
 // J[9]=Problems, K[10]=Materials Tomorrow, L[11]=Boss Note
 
 // ─── Module state ─────────────────────────────────────────────────────────────
-let chartBricks   = null;
-let chartProgress = null;
-let chartCrew     = null;
+let chartBricks       = null;
+let chartProgress     = null;
+let chartCrew         = null;
+let chartWeeklyTrend  = null;
 let currentBySite = null; // Map<siteName, rows[]>
 let activeTab     = '__all__';
+let jobsLoaded       = false;
+let activeJobsData   = [];        // active jobs, sorted — source of truth for filtering
+let jobsStatusFilter = '__all__'; // current status pill selection
+let jobsSearchText   = '';        // current search string (lower-cased)
+let sm8Materials     = null;      // fetched jobmaterial.json data (null = not loaded)
+let sm8Activities    = null;      // fetched jobactivity.json data (null = not loaded)
+let sm8CompanyMap    = new Map(); // uuid → company_name, populated on first SM8 load
+let showProfit         = false;   // whether Profit column is visible
+let showOldWorkOrders  = true;    // show Work Orders older than 90 days in overdue panel
+
+// ─── Business filter ─────────────────────────────────────────────────────────
+const BIZ_KEY = 'dynasty-biz-filter';
+let activeBiz = localStorage.getItem(BIZ_KEY) || 'all'; // 'all' | 'bricklaying' | 'pressure'
+
+const BIZ_KEYWORDS = {
+  bricklaying: ['brick', 'block', 'footing', 'mortar', 'rwb', 'veneer', 'wall', 'render', 'paving'],
+  pressure:    ['clean', 'pressure', 'solar', 'roof', 'driveway', 'wash', 'gutter', 'high-pres'],
+};
+
+function jobMatchesBiz(job) {
+  if (activeBiz === 'all') return true;
+  const kws  = BIZ_KEYWORDS[activeBiz] || [];
+  const text = ((job.job_description || '') + ' ' + (job.job_address || '')).toLowerCase();
+  return kws.some(k => text.includes(k));
+}
+
+function filterByBiz(jobs) {
+  return activeBiz === 'all' ? jobs : jobs.filter(jobMatchesBiz);
+}
+
+function isPaid(job) {
+  const v = job.payment_received;
+  return v === 1 || v === '1';
+}
 
 // ─── DOM refs ─────────────────────────────────────────────────────────────────
 const $ = id => document.getElementById(id);
@@ -33,14 +137,33 @@ const dom = {
   // Views
   viewAll:         $('viewAll'),
   viewSite:        $('viewSite'),
+  viewJobs:        $('viewJobs'),
+  viewPipeline:    $('viewPipeline'),
+  viewFinance:     $('viewFinance'),
+  // Jobs tab
+  jobsRevenue:     $('jobsRevenue'),
+  jobsSearch:      $('jobsSearch'),
+  jobsFilterPills: $('jobsFilterPills'),
+  jobsCount:       $('jobsCount'),
+  jobsTableBody:   $('jobsTableBody'),
+  // Pipeline tab
+  pipelineProjected:   $('pipelineProjected'),
+  pipelineConversion:  $('pipelineConversion'),
+  pipelineOverdue:     $('pipelineOverdue'),
+  pipelineStaleQuotes: $('pipelineStaleQuotes'),
+  // Finance tab
+  financeProjected:     $('financeProjected'),
   // All Jobs KPIs
   ovTotalBricks:   $('ovTotalBricks'),
   ovTotalCrew:     $('ovTotalCrew'),
   ovActiveSites:   $('ovActiveSites'),
   ovTotalProblems: $('ovTotalProblems'),
   ovProblemsCard:  $('ovProblemsCard'),
-  siteCardsGrid:   $('siteCardsGrid'),
-  weeklySummary:   $('weeklySummary'),
+  alertsBanner:        $('alertsBanner'),
+  siteCardsGrid:       $('siteCardsGrid'),
+  completionCountdown: $('completionCountdown'),
+  allMaterialsPanel:   $('allMaterialsPanel'),
+  weeklySummary:       $('weeklySummary'),
   // Single site
   jobLabel:        $('jobLabel'),
   bossNote:        $('bossNote'),
@@ -100,33 +223,65 @@ function escHtml(str) {
     .replace(/"/g, '&quot;');
 }
 
-function formatDateShort(dateStr) {
-  if (!dateStr) return '—';
-  try {
-    let d;
-    if (/^\d{1,2}\/\d{1,2}\/\d{4}/.test(dateStr)) {
-      const [day, month, year] = dateStr.split('/');
-      d = new Date(`${year}-${month.padStart(2,'0')}-${day.padStart(2,'0')}T12:00:00`);
-    } else {
-      d = new Date(dateStr + (dateStr.includes('T') ? '' : 'T12:00:00'));
-    }
-    if (isNaN(d)) return dateStr;
-    return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
-  } catch { return dateStr; }
+// ─── Date helpers ─────────────────────────────────────────────────────────────
+
+// Strip time component so "14/04/2026 12:00:00" → "14/04/2026"
+function cleanDateStr(s) {
+  return (s || '').trim().split(/[\sT]/)[0];
 }
 
-// ─── Date helpers ─────────────────────────────────────────────────────────────
 function parseDate(dateStr) {
   if (!dateStr) return null;
   try {
-    if (/^\d{1,2}\/\d{1,2}\/\d{4}/.test(dateStr)) {
-      const [day, month, year] = dateStr.split('/');
-      const d = new Date(`${year}-${month.padStart(2,'0')}-${day.padStart(2,'0')}T12:00:00`);
-      return isNaN(d) ? null : d;
+    const clean = cleanDateStr(dateStr);
+    // DD/MM/YYYY or D/M/YYYY — Australian / UK Google Sheets format
+    if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(clean)) {
+      const [d, m, y] = clean.split('/');
+      const dt = new Date(`${y}-${m.padStart(2,'0')}-${d.padStart(2,'0')}T12:00:00`);
+      return isNaN(dt) ? null : dt;
     }
-    const d = new Date(dateStr + (dateStr.includes('T') ? '' : 'T12:00:00'));
-    return isNaN(d) ? null : d;
+    // YYYY-MM-DD
+    if (/^\d{4}-\d{2}-\d{2}$/.test(clean)) {
+      const dt = new Date(clean + 'T12:00:00');
+      return isNaN(dt) ? null : dt;
+    }
+    // Fallback — let JS try, avoiding timezone shift by appending noon
+    const dt = new Date(clean.includes('T') ? clean : clean + 'T12:00:00');
+    return isNaN(dt) ? null : dt;
   } catch { return null; }
+}
+
+function formatDateShort(dateStr) {
+  const d = parseDate(dateStr);
+  if (!d) return dateStr || '—';
+  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+}
+
+function timeAgo(dateStr) {
+  const d = parseDate(dateStr);
+  if (!d) return formatDateShort(dateStr);
+  const now = new Date();
+  const dDay     = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const todayDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const diffDays = Math.round((todayDay - dDay) / (1000 * 60 * 60 * 24));
+  if (diffDays === 0) return 'Today';
+  if (diffDays === 1) return 'Yesterday';
+  return `${diffDays} days ago`;
+}
+
+// Three-state site status: 'problem' | 'behind' | 'ontrack'
+function getSiteStatus(siteName, rows) {
+  const latest = rows[rows.length - 1];
+  // Problem: latest entry has a problem that hasn't been resolved
+  if (latest.problems && latest.problems.trim()) {
+    const resolved    = loadResolved();
+    const resolvedSet = new Set(resolved.map(r => r.key));
+    if (!resolvedSet.has(alertKey(siteName, latest.date))) return 'problem';
+  }
+  // Behind: current days left is more than 20% above the first recorded estimate
+  const firstDaysLeft = rows[0].daysLeft;
+  if (firstDaysLeft > 0 && latest.daysLeft > firstDaysLeft * 1.2) return 'behind';
+  return 'ontrack';
 }
 
 function startOfWeek(d) {
@@ -141,26 +296,46 @@ function startOfWeek(d) {
 
 // ─── CSV fetch & parse ────────────────────────────────────────────────────────
 async function fetchCSV() {
-  // 1. Try direct — works when served from a real web server
+  // 1. Try direct — works when served from a real web server (GitHub Pages, localhost)
   try {
     console.log('[Dynasty] Trying direct fetch…');
     const res = await fetch(SHEET_CSV_URL);
     if (res.ok) {
-      console.log('[Dynasty] Direct fetch succeeded.');
-      return res.text();
+      const text = await res.text();
+      console.log('[Dynasty] Direct fetch succeeded. First 200 chars:', text.slice(0, 200));
+      return text;
     }
-    console.warn(`[Dynasty] Direct fetch returned HTTP ${res.status} — falling back to proxy.`);
+    console.warn('[Dynasty] Direct fetch HTTP', res.status);
   } catch (err) {
-    console.warn('[Dynasty] Direct fetch threw (likely CORS on file://):', err.message, '— falling back to proxy.');
+    console.warn('[Dynasty] Direct fetch threw (CORS expected on file://):', err.message);
   }
 
-  // 2. Fall back to CORS proxy (needed when opening as a local file)
-  const proxyUrl = CORS_PROXY + encodeURIComponent(SHEET_CSV_URL);
-  console.log('[Dynasty] Fetching via proxy:', proxyUrl);
-  const res = await fetch(proxyUrl);
-  if (!res.ok) throw new Error(`Proxy fetch failed: HTTP ${res.status}`);
-  console.log('[Dynasty] Proxy fetch succeeded.');
-  return res.text();
+  // 2. Try each CORS proxy in order until one returns valid CSV
+  for (let i = 0; i < CORS_PROXIES.length; i++) {
+    const proxyUrl = CORS_PROXIES[i](SHEET_CSV_URL);
+    console.log(`[Dynasty] Trying proxy ${i + 1}/${CORS_PROXIES.length}:`, proxyUrl);
+    try {
+      const res = await fetch(proxyUrl);
+      console.log(`[Dynasty] Proxy ${i + 1} status: HTTP ${res.status}`);
+      if (!res.ok) {
+        console.warn(`[Dynasty] Proxy ${i + 1} returned HTTP ${res.status} — trying next.`);
+        continue;
+      }
+      const text = await res.text();
+      console.log(`[Dynasty] Proxy ${i + 1} raw response (first 400 chars):`, text.slice(0, 400));
+      // Reject if the proxy returned an HTML error page instead of CSV
+      if (text.trimStart().startsWith('<')) {
+        console.warn(`[Dynasty] Proxy ${i + 1} returned HTML, not CSV — trying next.`);
+        continue;
+      }
+      console.log(`[Dynasty] Proxy ${i + 1} returned valid CSV ✓`);
+      return text;
+    } catch (err) {
+      console.warn(`[Dynasty] Proxy ${i + 1} threw:`, err.message);
+    }
+  }
+
+  throw new Error('All fetch attempts failed — check console for details.');
 }
 
 function splitCSVLine(line) {
@@ -179,13 +354,22 @@ function splitCSVLine(line) {
 function parseCSV(csv) {
   const lines = csv.trim().split('\n').map(l => l.trim()).filter(Boolean);
   if (lines.length < 2) return [];
-  return lines.slice(1).map(line => {
+
+  // ── Debug: log raw column values so date/number issues are visible in console
+  console.log('[Dynasty] Header row :', lines[0]);
+  lines.slice(1, 4).forEach((line, i) => {
+    const c = splitCSVLine(line);
+    console.log(`[Dynasty] Raw row ${i + 1} — A(timestamp)="${c[0]}" B(date)="${c[1]}" C(site)="${c[2]}" D(crew)="${c[3]}" E(bricks)="${c[4]}"`);
+  });
+
+  const rows = lines.slice(1).map(line => {
     const c = splitCSVLine(line);
     return {
       timestamp:    c[0]  || '',
       date:         c[1]  || '',
       jobSite:      c[2]  || '',
       crew:         parseFloat(c[3])  || 0,
+      crewName:     c[3]  || '',
       bricks:       parseFloat(c[4])  || 0,
       runningTotal: parseFloat(c[5])  || 0,
       progress:     parseFloat(c[6])  || 0,
@@ -196,6 +380,10 @@ function parseCSV(csv) {
       bossNote:     c[11] || '',
     };
   }).filter(r => r.date || r.timestamp);
+
+  console.log(`[Dynasty] Parsed ${rows.length} rows. Dates:`,  rows.slice(0, 5).map(r => r.date));
+  console.log('[Dynasty] Bricks/Crew (first 5):', rows.slice(0, 5).map(r => `${r.bricks}/${r.crew}`));
+  return rows;
 }
 
 // ─── Group rows by site ────────────────────────────────────────────────────────
@@ -207,36 +395,83 @@ function groupBySite(rows) {
     if (!map.has(site)) map.set(site, []);
     map.get(site).push(row);
   }
+  // Sort each site's rows by date ascending so rows[last] = most recent entry
+  for (const siteRows of map.values()) {
+    siteRows.sort((a, b) => {
+      const da = parseDate(a.date), db = parseDate(b.date);
+      if (!da && !db) return 0;
+      if (!da) return -1;
+      if (!db) return 1;
+      return da - db;
+    });
+  }
   return map;
 }
 
 // ─── Tab management ───────────────────────────────────────────────────────────
 function buildTabs(bySite) {
   dom.tabBar.innerHTML = '';
+  const portal = isPortal();
 
   const makeTab = (key, label, count) => {
     const btn = document.createElement('button');
     btn.className = 'tab' + (key === activeTab ? ' tab--active' : '');
     btn.dataset.site = key;
     btn.innerHTML = escHtml(label) +
-      (count != null ? `<span class="tab-count">${count}</span>` : '');
+      (count != null ? `<span class="tab-count">${count}</span>` : '') +
+      `<span class="tab-badge" id="badge-${key}" hidden></span>`;
     btn.addEventListener('click', () => switchTab(key));
     dom.tabBar.appendChild(btn);
   };
 
-  makeTab('__all__', 'All Jobs', bySite.size);
-  for (const [site, rows] of bySite) {
-    const latest = rows[rows.length - 1];
-    // Show a red dot on the tab if the latest entry has a problem
-    const hasProb = latest.problems && latest.problems.trim();
-    const btn = document.createElement('button');
-    btn.className = 'tab' + (site === activeTab ? ' tab--active' : '');
-    btn.dataset.site = site;
-    btn.innerHTML = escHtml(site) +
-      (hasProb ? '<span class="tab-dot tab-dot--problem"></span>' : '');
-    btn.addEventListener('click', () => switchTab(site));
-    dom.tabBar.appendChild(btn);
+  makeTab('__all__', 'All Jobs', null);
+  if (!portal) {
+    makeTab('__jobs__',     'Jobs',     null);
+    makeTab('__pipeline__', 'Pipeline', null);
+    makeTab('__finance__',  'Finance',  null);
   }
+
+  // Hide biz toggle in portal mode
+  const bizToggle = document.getElementById('bizToggle');
+  if (bizToggle) bizToggle.style.display = portal ? 'none' : '';
+
+  // If portal mode and current tab is not allowed, switch to all
+  if (portal && activeTab !== '__all__') {
+    activeTab = '__all__';
+  }
+}
+
+function updateTabBadges(jobs) {
+  const now = new Date();
+  const MS  = 1000 * 60 * 60 * 24;
+
+  // Jobs tab: count of unpaid completed jobs
+  const unpaidCompleted = jobs.filter(j => j.status === 'Completed' && !isPaid(j)).length;
+
+  // Pipeline tab: overdue work orders (>30 days old)
+  const overdueCount = jobs.filter(j => {
+    if (j.status !== 'Work Order') return false;
+    const d = new Date((j.date || '').substring(0, 10) + 'T00:00:00');
+    return !isNaN(d) && (now - d) / MS > 30;
+  }).length;
+
+  // Finance tab: unpaid completed jobs older than 60 days
+  const overdueUnpaid = jobs.filter(j => {
+    if (j.status !== 'Completed' || isPaid(j)) return false;
+    const d = new Date((j.date || '').substring(0, 10) + 'T00:00:00');
+    return !isNaN(d) && (now - d) / MS > 60;
+  }).length;
+
+  const setBadge = (id, count) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.hidden = count === 0;
+    el.textContent = count > 9 ? '9+' : String(count);
+  };
+
+  setBadge('badge-__jobs__',     unpaidCompleted);
+  setBadge('badge-__pipeline__', overdueCount);
+  setBadge('badge-__finance__',  overdueUnpaid);
 }
 
 function switchTab(siteKey) {
@@ -245,14 +480,26 @@ function switchTab(siteKey) {
     t.classList.toggle('tab--active', t.dataset.site === siteKey);
   });
 
+  const showOnly = id => {
+    dom.viewAll.hidden      = id !== 'all';
+    dom.viewSite.hidden     = id !== 'site';
+    dom.viewJobs.hidden     = id !== 'jobs';
+    dom.viewPipeline.hidden = id !== 'pipeline';
+    dom.viewFinance.hidden  = id !== 'finance';
+  };
+
   if (siteKey === '__all__') {
-    dom.viewAll.hidden = false;
-    dom.viewSite.hidden = true;
+    showOnly('all');
     renderAllJobs(currentBySite);
-  } else {
-    dom.viewAll.hidden = true;
-    dom.viewSite.hidden = false;
-    renderSite(currentBySite.get(siteKey), siteKey);
+  } else if (siteKey === '__jobs__') {
+    showOnly('jobs');
+    loadServiceM8Data('__jobs__');
+  } else if (siteKey === '__pipeline__') {
+    showOnly('pipeline');
+    loadServiceM8Data('__pipeline__');
+  } else if (siteKey === '__finance__') {
+    showOnly('finance');
+    loadServiceM8Data('__finance__');
   }
 }
 
@@ -354,13 +601,348 @@ function renderSiteAverages(rows) {
     </div>`;
 }
 
+// ─── Resolved problems — localStorage helpers ─────────────────────────────────
+const RESOLVED_KEY = 'dynasty-resolved-problems';
+
+function loadResolved() {
+  try { return JSON.parse(localStorage.getItem(RESOLVED_KEY) || '[]'); }
+  catch { return []; }
+}
+
+function saveResolved(list) {
+  localStorage.setItem(RESOLVED_KEY, JSON.stringify(list));
+}
+
+// Unique key per problem: site + entry date (new date = new active problem)
+function alertKey(site, date) { return `${site}::${date}`; }
+
+// ─── Completed sites — localStorage helpers ───────────────────────────────────
+const COMPLETED_SITES_KEY = 'dynasty-completed-sites';
+
+function loadCompletedSites() {
+  try { return JSON.parse(localStorage.getItem(COMPLETED_SITES_KEY) || '[]'); }
+  catch { return []; }
+}
+
+function saveCompletedSites(list) {
+  localStorage.setItem(COMPLETED_SITES_KEY, JSON.stringify(list));
+}
+
+// Update site card badges in-place without re-rendering charts
+function refreshSiteCardBadges() {
+  if (!currentBySite) return;
+  dom.siteCardsGrid.querySelectorAll('.site-card[data-site]').forEach(card => {
+    const rows = currentBySite.get(card.dataset.site);
+    if (!rows) return;
+    const status = getSiteStatus(card.dataset.site, rows);
+    const badge  = card.querySelector('.site-card-badge');
+    if (!badge) return;
+    badge.className = 'site-card-badge site-card-badge--' +
+      (status === 'problem' ? 'problem' : status === 'behind' ? 'behind' : 'ok');
+    badge.innerHTML = status === 'problem' ? '&#9888; Problem'
+      : status === 'behind'  ? '&#9650; Behind'
+      : '&#10003; On Track';
+  });
+}
+
+// ─── Active Problems sidebar (sits alongside Weekly Summary) ──────────────────
+function renderAlertsBanner(bySite) {
+  const resolved    = loadResolved();
+  const resolvedSet = new Set(resolved.map(r => r.key));
+
+  // Collect unresolved active problems
+  const active = [];
+  for (const [site, rows] of bySite) {
+    const latest = rows[rows.length - 1];
+    if (!latest.problems || !latest.problems.trim()) continue;
+    const key = alertKey(site, latest.date);
+    if (!resolvedSet.has(key)) {
+      active.push({ site, text: latest.problems.trim(), date: latest.date, key });
+    }
+  }
+
+  const hasActive   = active.length   > 0;
+  const hasResolved = resolved.length > 0;
+
+  dom.alertsBanner.innerHTML = `
+    <div class="alerts-sidebar-card">
+      <div class="alerts-sidebar-header">
+        <span class="alerts-sidebar-icon">&#9888;</span>
+        <span class="alerts-sidebar-title">Active Problems &amp; Alerts</span>
+        ${hasActive ? `<span class="alerts-sidebar-count">${active.length}</span>` : ''}
+      </div>
+
+      ${hasActive ? `
+      <div class="alerts-sidebar-list">
+        ${active.map(a => `
+          <div class="alerts-sidebar-item" data-site="${escHtml(a.site)}" tabindex="0"
+               aria-label="View ${escHtml(a.site)} details">
+            <div class="alerts-sidebar-item-top">
+              <span class="alerts-sidebar-site">${escHtml(a.site)}</span>
+              <span class="alerts-sidebar-when">${timeAgo(a.date)}</span>
+            </div>
+            <div class="alerts-sidebar-text">${escHtml(a.text)}</div>
+            <button class="alert-resolve-btn"
+                    data-key="${escHtml(a.key)}"
+                    data-site="${escHtml(a.site)}"
+                    data-text="${escHtml(a.text)}"
+                    data-date="${escHtml(a.date)}"
+                    title="Mark as resolved">&#10003; Resolve</button>
+          </div>`).join('')}
+      </div>` : `
+      <div class="alerts-sidebar-clear">
+        <span class="alerts-sidebar-clear-icon">&#10003;</span>
+        <span>All clear — no active problems</span>
+      </div>`}
+
+      ${hasResolved ? `
+      <div class="resolved-panel">
+        <button class="resolved-header" id="resolvedToggle" aria-expanded="false">
+          <span class="resolved-icon">&#10003;</span>
+          <span class="resolved-title">Resolved (${resolved.length})</span>
+          <span class="resolved-chevron" id="resolvedChevron">&#9660;</span>
+        </button>
+        <div class="resolved-list" id="resolvedList" hidden>
+          ${resolved.map(r => `
+            <div class="resolved-item">
+              <div class="resolved-item-body">
+                <span class="resolved-site">${escHtml(r.site)}</span>
+                <span class="alert-sep">—</span>
+                <span class="resolved-text">${escHtml(r.text)}</span>
+              </div>
+              <div class="resolved-meta">
+                <span>Flagged: ${formatDateShort(r.date)}</span>
+                <span class="resolved-sep">·</span>
+                <span>Resolved: ${new Date(r.resolvedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}</span>
+                <button class="resolved-reopen-btn" data-key="${escHtml(r.key)}" title="Reopen this problem">Reopen</button>
+              </div>
+            </div>`).join('')}
+        </div>
+      </div>` : ''}
+    </div>`;
+
+  // Open site modal on item click (not if clicking Resolve button)
+  dom.alertsBanner.querySelectorAll('.alerts-sidebar-item').forEach(el => {
+    const go = () => openSiteModal(el.dataset.site);
+    el.addEventListener('click', e => { if (!e.target.closest('.alert-resolve-btn')) go(); });
+    el.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.target.closest('.alert-resolve-btn')) go(); });
+  });
+
+  // Resolve button
+  dom.alertsBanner.querySelectorAll('.alert-resolve-btn').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      const { key, site, text, date } = btn.dataset;
+      const list = loadResolved();
+      if (!list.find(r => r.key === key)) {
+        list.push({ key, site, text, date, resolvedAt: new Date().toISOString() });
+        saveResolved(list);
+      }
+      renderAlertsBanner(currentBySite);
+      refreshSiteCardBadges();
+    });
+  });
+
+  // Collapsed resolved section toggle
+  const toggleBtn  = document.getElementById('resolvedToggle');
+  const resolvedUl = document.getElementById('resolvedList');
+  const chevron    = document.getElementById('resolvedChevron');
+  if (toggleBtn && resolvedUl) {
+    toggleBtn.addEventListener('click', () => {
+      const opening = resolvedUl.hidden;
+      resolvedUl.hidden = !opening;
+      chevron.innerHTML  = opening ? '&#9650;' : '&#9660;';
+      toggleBtn.setAttribute('aria-expanded', String(opening));
+    });
+  }
+
+  // Reopen button
+  dom.alertsBanner.querySelectorAll('.resolved-reopen-btn').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      saveResolved(loadResolved().filter(r => r.key !== btn.dataset.key));
+      renderAlertsBanner(currentBySite);
+      refreshSiteCardBadges();
+    });
+  });
+}
+
+// ─── Job completion countdown ─────────────────────────────────────────────────
+function renderCompletionCountdown(bySite) {
+  const items = [...bySite.entries()].map(([site, rows]) => {
+    const latest   = rows[rows.length - 1];
+    const prog     = Math.min(100, Math.max(0, latest.progress || 0));
+    const daysLeft = latest.daysLeft || 0;
+
+    let etaStr = '';
+    if (daysLeft > 0) {
+      const eta = new Date();
+      eta.setDate(eta.getDate() + Math.round(daysLeft));
+      etaStr = eta.toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' });
+    }
+
+    const withBricks = rows.filter(r => r.bricks > 0);
+    const avgBricks  = withBricks.length > 0
+      ? Math.round(withBricks.reduce((s, r) => s + r.bricks, 0) / withBricks.length)
+      : 0;
+
+    return `
+      <div class="countdown-item" data-site="${escHtml(site)}" role="button" tabindex="0"
+           aria-label="View ${escHtml(site)} completion details">
+        <div class="countdown-header">
+          <span class="countdown-site">${escHtml(site)}</span>
+          <span class="countdown-pct">${prog}%</span>
+          ${etaStr ? `<span class="countdown-eta">Est. finish: ${escHtml(etaStr)}</span>` : ''}
+        </div>
+        <div class="countdown-bar-wrap">
+          <div class="countdown-bar" style="width:${prog}%"></div>
+        </div>
+        <div class="countdown-meta">
+          ${daysLeft ? `<span>&#128197; ${daysLeft} day${daysLeft !== 1 ? 's' : ''} remaining</span>` : ''}
+          ${avgBricks ? `<span>&#9651; ${avgBricks.toLocaleString()} bricks/day avg</span>` : ''}
+        </div>
+      </div>`;
+  });
+
+  dom.completionCountdown.innerHTML = `
+    <div class="countdown-card">
+      <h2 class="card-title"><span class="card-title-icon">&#127937;</span> Job Completion Countdown</h2>
+      <div class="countdown-list">${items.join('')}</div>
+    </div>`;
+
+  dom.completionCountdown.querySelectorAll('.countdown-item').forEach(el => {
+    const go = () => openSiteModal(el.dataset.site);
+    el.addEventListener('click', go);
+    el.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') go(); });
+  });
+}
+
+// ─── Weekly bricks trend chart (All Jobs) ─────────────────────────────────────
+function buildWeeklyTrendChart(bySite) {
+  const now       = new Date();
+  const weekStart = startOfWeek(now);
+
+  // One entry per day Mon–Sun
+  const days = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(weekStart);
+    d.setDate(weekStart.getDate() + i);
+    return d;
+  });
+
+  // Sum bricks across all sites per calendar day
+  const bricksByKey = {};
+  for (const [, rows] of bySite) {
+    for (const r of rows) {
+      const d = parseDate(r.date);
+      if (!d) continue;
+      const key = d.toDateString();
+      bricksByKey[key] = (bricksByKey[key] || 0) + (r.bricks || 0);
+    }
+  }
+
+  const labels = days.map(d =>
+    d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })
+  );
+  const data   = days.map(d => bricksByKey[d.toDateString()] || 0);
+  const todayStr = now.toDateString();
+
+  if (chartWeeklyTrend) chartWeeklyTrend.destroy();
+
+  chartWeeklyTrend = new Chart($('chartWeeklyTrend'), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Bricks laid',
+        data,
+        borderColor: '#c9a84c',
+        borderWidth: 2.5,
+        pointBackgroundColor: days.map(d => d.toDateString() === todayStr ? '#e8c96a' : '#c9a84c'),
+        pointRadius:          days.map(d => d.toDateString() === todayStr ? 7 : 4),
+        pointHoverRadius: 8,
+        fill: true,
+        backgroundColor: ctx => {
+          const c = ctx.chart;
+          return c.chartArea ? goldGrad(c.ctx, c.chartArea) : 'rgba(201,168,76,0.1)';
+        },
+        tension: 0.3,
+      }],
+    },
+    options: {
+      ...JSON.parse(JSON.stringify(CHART_DEFAULTS)),
+      plugins: { ...CHART_DEFAULTS.plugins, tooltip: { ...CHART_DEFAULTS.plugins.tooltip,
+        callbacks: { label: ctx => ` ${ctx.parsed.y.toLocaleString()} bricks` },
+      }},
+      scales: { ...CHART_DEFAULTS.scales,
+        y: { ...CHART_DEFAULTS.scales.y, min: 0,
+          ticks: { ...CHART_DEFAULTS.scales.y.ticks, callback: v => v.toLocaleString() } },
+      },
+    },
+  });
+}
+
+// ─── All-sites materials panel ────────────────────────────────────────────────
+function renderAllMaterials(bySite) {
+  // Only show materials logged today or yesterday (entry date within last 24 h)
+  const now           = new Date();
+  const yesterdayStart = new Date(now);
+  yesterdayStart.setDate(now.getDate() - 1);
+  yesterdayStart.setHours(0, 0, 0, 0);
+
+  const entries = [];
+  for (const [site, rows] of bySite) {
+    const r = [...rows].reverse().find(r => r.materials && r.materials.trim());
+    if (!r) continue;
+    const entryDate = parseDate(r.date);
+    if (!entryDate || entryDate < yesterdayStart) continue; // stale — skip
+    entries.push({ site, materials: r.materials.trim(), date: r.date });
+  }
+
+  if (!entries.length) {
+    dom.allMaterialsPanel.innerHTML = '';
+    return;
+  }
+
+  const cards = entries.map(({ site, materials, date }) => {
+    const items = materials.split(/[,;\n]/).map(s => s.trim()).filter(Boolean);
+    return `
+      <div class="mat-card" data-site="${escHtml(site)}" role="button" tabindex="0"
+           aria-label="Materials for ${escHtml(site)}">
+        <div class="mat-card-header">
+          <span class="mat-site">${escHtml(site)}</span>
+          <span class="mat-date">${formatDateShort(date)}</span>
+        </div>
+        <ul class="mat-list">
+          ${items.map(item => `<li class="mat-item">&#128230; ${escHtml(item)}</li>`).join('')}
+        </ul>
+      </div>`;
+  });
+
+  dom.allMaterialsPanel.innerHTML = `
+    <div class="all-materials-panel">
+      <h2 class="card-title"><span class="card-title-icon">&#128230;</span> Materials Needed Tomorrow — All Sites</h2>
+      <div class="mat-grid">${cards.join('')}</div>
+    </div>`;
+
+  dom.allMaterialsPanel.querySelectorAll('.mat-card').forEach(el => {
+    const go = () => openSiteModal(el.dataset.site);
+    el.addEventListener('click', go);
+    el.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') go(); });
+  });
+}
+
 // ─── All Jobs overview ────────────────────────────────────────────────────────
 function renderAllJobs(bySite) {
+  const completedSet = new Set(loadCompletedSites().map(s => s.name));
+
+  // Split sites into active and completed
+  const activeSites    = [...bySite.entries()].filter(([name]) => !completedSet.has(name));
+
   let totalBricks   = 0;
   let totalCrew     = 0;
   let totalProblems = 0;
 
-  for (const [, rows] of bySite) {
+  for (const [, rows] of activeSites) {
     const latest = rows[rows.length - 1];
     totalBricks   += latest.bricks || 0;
     totalCrew     += latest.crew   || 0;
@@ -369,30 +951,32 @@ function renderAllJobs(bySite) {
 
   dom.ovTotalBricks.textContent   = totalBricks.toLocaleString();
   dom.ovTotalCrew.textContent     = totalCrew;
-  dom.ovActiveSites.textContent   = bySite.size;
+  dom.ovActiveSites.textContent   = activeSites.length;
   dom.ovTotalProblems.textContent = totalProblems || '0';
 
   if (totalProblems > 0) dom.ovProblemsCard.classList.add('has-problems');
   else                   dom.ovProblemsCard.classList.remove('has-problems');
 
-  // Site summary cards
-  const cards = [...bySite.entries()].map(([siteName, rows]) => {
+  // Active site summary cards (click opens modal)
+  const cards = activeSites.map(([siteName, rows]) => {
     const latest     = rows[rows.length - 1];
     const problems   = rows.filter(r => r.problems && r.problems.trim());
     const latestProb = problems.length ? problems[problems.length - 1].problems : null;
     const latestMats = [...rows].reverse().find(r => r.materials && r.materials.trim());
     const latestDone = [...rows].reverse().find(r => r.doneToday && r.doneToday.trim());
-    const prog       = Math.min(100, Math.max(0, latest.progress || 0));
-    const hasProb    = latest.problems && latest.problems.trim();
+    const prog   = Math.min(100, Math.max(0, latest.progress || 0));
+    const status = getSiteStatus(siteName, rows);
 
     return `
       <div class="site-card" data-site="${escHtml(siteName)}" role="button" tabindex="0"
            aria-label="View ${escHtml(siteName)} details">
         <div class="site-card-header">
           <span class="site-card-name">${escHtml(siteName)}</span>
-          ${hasProb
+          ${status === 'problem'
             ? `<span class="site-card-badge site-card-badge--problem">&#9888; Problem</span>`
-            : `<span class="site-card-badge site-card-badge--ok">&#10003; On track</span>`}
+            : status === 'behind'
+              ? `<span class="site-card-badge site-card-badge--behind">&#9650; Behind</span>`
+              : `<span class="site-card-badge site-card-badge--ok">&#10003; On Track</span>`}
         </div>
 
         <div class="site-card-progress">
@@ -431,11 +1015,17 @@ function renderAllJobs(bySite) {
 
   dom.siteCardsGrid.innerHTML = cards.join('');
 
+  renderCompletionCountdown(new Map(activeSites));
+  buildWeeklyTrendChart(new Map(activeSites));
+  renderAllMaterials(bySite);
   renderWeeklySummary(bySite);
+  renderAlertsBanner(bySite);
+  renderCompletedSites(bySite);
+  renderCrewLeaderboard(bySite);
 
-  // Click / keyboard nav on site cards → jump to that site's tab
+  // Click / keyboard nav on site cards → open site detail modal
   dom.siteCardsGrid.querySelectorAll('.site-card').forEach(card => {
-    const go = () => switchTab(card.dataset.site);
+    const go = () => openSiteModal(card.dataset.site);
     card.addEventListener('click', go);
     card.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') go(); });
   });
@@ -482,9 +1072,9 @@ function buildCharts(rows) {
   const prog   = rows.map(r => r.progress);
   const crew   = rows.map(r => r.crew);
 
-  if (chartBricks)   chartBricks.destroy();
-  if (chartProgress) chartProgress.destroy();
-  if (chartCrew)     chartCrew.destroy();
+  if (chartBricks)      chartBricks.destroy();
+  if (chartProgress)    chartProgress.destroy();
+  if (chartCrew)        chartCrew.destroy();
 
   chartBricks = new Chart($('chartBricks'), {
     type: 'bar',
@@ -661,6 +1251,1068 @@ function renderSite(rows, siteName) {
   buildCharts(rows);
 }
 
+// ─── Site detail modal ───────────────────────────────────────────────────────
+
+// Single persistent overlay-click handler — wired once at page load (bottom of file)
+function _initModalOverlayClick() {
+  const modal = document.getElementById('siteModal');
+  if (!modal) return;
+  modal.addEventListener('click', e => {
+    // Close only when the click lands directly on the overlay backdrop, not on modal content
+    if (e.target === modal) {
+      console.log('[Dynasty] Modal overlay background clicked — closing');
+      closeSiteModal();
+    }
+  });
+}
+
+function openSiteModal(siteName) {
+  const rows = currentBySite && currentBySite.get(siteName);
+  if (!rows || !rows.length) {
+    console.warn('[Dynasty] openSiteModal: no rows for', siteName);
+    return;
+  }
+
+  const modal       = document.getElementById('siteModal');
+  const nameEl      = document.getElementById('modalSiteName');
+  const badgeEl     = document.getElementById('modalSiteBadge');
+  const bodyEl      = document.getElementById('siteModalBody');
+  const completeBtn = document.getElementById('modalCompleteBtn');
+  const closeBtn    = document.getElementById('siteModalClose');
+
+  // ── Populate header ──────────────────────────────────────────────────────
+  nameEl.textContent = siteName;
+
+  const status = getSiteStatus(siteName, rows);
+  badgeEl.className = 'site-card-badge site-card-badge--' +
+    (status === 'problem' ? 'problem' : status === 'behind' ? 'behind' : 'ok');
+  badgeEl.innerHTML = status === 'problem' ? '&#9888; Problem'
+    : status === 'behind'  ? '&#9650; Behind'
+    : '&#10003; On Track';
+
+  const isCompleted = loadCompletedSites().some(s => s.name === siteName);
+  completeBtn.style.display = isCompleted ? 'none' : '';
+
+  // ── Populate body ────────────────────────────────────────────────────────
+  const latest      = rows[rows.length - 1];
+  const prog        = Math.min(100, Math.max(0, latest.progress || 0));
+  const totalBricks = latest.runningTotal || rows.reduce((s, r) => s + (r.bricks || 0), 0);
+  const allProblems = rows.filter(r => r.problems && r.problems.trim());
+
+  bodyEl.innerHTML = `
+    <div class="modal-kpi-row">
+      <div class="modal-kpi modal-kpi--progress">
+        <div class="progress-bar-wrap" style="margin-bottom:0.35rem">
+          <div class="progress-bar" style="width:${prog}%"></div>
+        </div>
+        <span class="modal-kpi-label">${prog}% complete</span>
+      </div>
+      <div class="modal-kpi">
+        <div class="modal-kpi-value">${latest.bricks ? latest.bricks.toLocaleString() : '—'}</div>
+        <div class="modal-kpi-label">Bricks today</div>
+      </div>
+      <div class="modal-kpi">
+        <div class="modal-kpi-value">${latest.crew || '—'}</div>
+        <div class="modal-kpi-label">Crew</div>
+      </div>
+      <div class="modal-kpi">
+        <div class="modal-kpi-value">${latest.daysLeft || '—'}</div>
+        <div class="modal-kpi-label">Days left</div>
+      </div>
+      <div class="modal-kpi">
+        <div class="modal-kpi-value">${totalBricks.toLocaleString()}</div>
+        <div class="modal-kpi-label">Total bricks</div>
+      </div>
+    </div>
+
+    <h3 class="modal-section-title">
+      Daily Log
+      <span class="modal-section-count">${rows.length} entr${rows.length !== 1 ? 'ies' : 'y'}</span>
+    </h3>
+    <div class="modal-table-wrap">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Date</th><th>Bricks</th><th>Running Total</th><th>Crew</th>
+            <th>What got done</th><th>Problems</th><th>Materials tomorrow</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${[...rows].reverse().map((r, i) => {
+            const hasProb = r.problems && r.problems.trim();
+            return `<tr class="${i === 0 ? 'row-latest' : ''} ${hasProb ? 'row-problem' : ''}">
+              <td>${formatDateShort(r.date)}</td>
+              <td>${r.bricks ? r.bricks.toLocaleString() : '—'}</td>
+              <td>${r.runningTotal ? r.runningTotal.toLocaleString() : '—'}</td>
+              <td>${r.crew || '—'}</td>
+              <td class="modal-td-wrap">${escHtml(r.doneToday || '—')}</td>
+              <td class="modal-td-wrap">${hasProb
+                ? `<span style="color:var(--red)">${escHtml(r.problems)}</span>`
+                : '<span style="color:var(--text-dim)">—</span>'}</td>
+              <td class="modal-td-wrap" style="color:var(--text-muted)">${escHtml(r.materials || '—')}</td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>
+
+    ${allProblems.length ? `
+    <h3 class="modal-section-title">
+      Problems History
+      <span class="modal-section-count">${allProblems.length} total</span>
+    </h3>
+    <div class="modal-problems-list">
+      ${[...allProblems].reverse().map(r => `
+        <div class="modal-problem-item">
+          <span class="modal-problem-date">${formatDateShort(r.date)}</span>
+          <span class="modal-problem-text">${escHtml(r.problems)}</span>
+        </div>`).join('')}
+    </div>` : ''}
+  `;
+
+  // ── Show modal ───────────────────────────────────────────────────────────
+  // Scroll body back to top in case it was scrolled from a previous open
+  bodyEl.scrollTop = 0;
+  modal.classList.add('is-open');
+  document.body.classList.add('modal-open');
+
+  // ── Wire buttons (assigned fresh each open so siteName closure is current) ─
+  closeBtn.onclick = () => {
+    console.log('[Dynasty] Modal close button clicked');
+    closeSiteModal();
+  };
+  completeBtn.onclick = () => {
+    console.log('[Dynasty] Mark as Complete clicked for', siteName);
+    confirmMarkComplete(siteName);
+  };
+}
+
+function closeSiteModal() {
+  const modal = document.getElementById('siteModal');
+  if (modal) modal.classList.remove('is-open');
+  document.body.classList.remove('modal-open');
+}
+
+// Confirm + execute mark-as-complete
+function confirmMarkComplete(siteName) {
+  if (!confirm(`Mark "${siteName}" as complete?\n\nThis will move it to the Completed Sites panel. You can reactivate it at any time.`)) return;
+  const list = loadCompletedSites();
+  if (!list.some(s => s.name === siteName)) {
+    list.push({ name: siteName, completedAt: new Date().toISOString() });
+    saveCompletedSites(list);
+  }
+  closeSiteModal();
+  renderAllJobs(currentBySite);
+}
+
+// ─── Completed sites panel ────────────────────────────────────────────────────
+function renderCompletedSites(bySite) {
+  const el = document.getElementById('completedSitesPanel');
+  if (!el) return;
+
+  const completed    = loadCompletedSites();
+  const validEntries = completed.filter(s => bySite.has(s.name));
+  if (!validEntries.length) { el.innerHTML = ''; return; }
+
+  const cards = validEntries.map(({ name, completedAt }) => {
+    const rows        = bySite.get(name);
+    const totalBricks = rows.reduce((s, r) => s + (r.bricks || 0), 0);
+    const totalDays   = rows.length;
+    const completedDate = new Date(completedAt).toLocaleDateString('en-AU', {
+      day: 'numeric', month: 'short', year: 'numeric',
+    });
+
+    return `
+      <div class="site-card site-card--completed" data-site="${escHtml(name)}"
+           role="button" tabindex="0" aria-label="View ${escHtml(name)} history">
+        <div class="site-card-header">
+          <span class="site-card-name">${escHtml(name)}</span>
+          <span class="site-card-badge site-card-badge--complete">&#10003; Complete</span>
+        </div>
+        <div class="site-card-completed-meta">
+          <span>Completed ${escHtml(completedDate)}</span>
+          <span class="completed-sep">&#183;</span>
+          <span>${totalBricks.toLocaleString()} bricks total</span>
+          <span class="completed-sep">&#183;</span>
+          <span>${totalDays} day${totalDays !== 1 ? 's' : ''} on site</span>
+        </div>
+        <button class="btn-reactivate" data-site="${escHtml(name)}">&#8635; Reactivate</button>
+      </div>`;
+  });
+
+  el.innerHTML = `
+    <div class="completed-sites-panel">
+      <button class="completed-sites-toggle" id="completedToggle" aria-expanded="false">
+        <span class="completed-sites-icon">&#10003;</span>
+        <span class="completed-sites-title">Completed Sites (${validEntries.length})</span>
+        <span class="completed-sites-chevron" id="completedChevron">&#9660;</span>
+      </button>
+      <div class="completed-sites-list" id="completedSitesList" hidden>
+        <div class="site-cards-grid completed-cards-grid">${cards.join('')}</div>
+      </div>
+    </div>`;
+
+  // Toggle expand/collapse
+  const toggleBtn = document.getElementById('completedToggle');
+  const listEl    = document.getElementById('completedSitesList');
+  const chevron   = document.getElementById('completedChevron');
+  if (toggleBtn && listEl) {
+    toggleBtn.addEventListener('click', () => {
+      const opening = listEl.hidden;
+      listEl.hidden = !opening;
+      chevron.innerHTML = opening ? '&#9650;' : '&#9660;';
+      toggleBtn.setAttribute('aria-expanded', String(opening));
+    });
+  }
+
+  // Click card → open modal for history view
+  el.querySelectorAll('.site-card--completed').forEach(card => {
+    card.addEventListener('click', e => {
+      if (!e.target.closest('.btn-reactivate')) openSiteModal(card.dataset.site);
+    });
+    card.addEventListener('keydown', e => {
+      if ((e.key === 'Enter' || e.key === ' ') && !e.target.closest('.btn-reactivate')) {
+        openSiteModal(card.dataset.site);
+      }
+    });
+  });
+
+  // Reactivate button
+  el.querySelectorAll('.btn-reactivate').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      saveCompletedSites(loadCompletedSites().filter(s => s.name !== btn.dataset.site));
+      renderAllJobs(currentBySite);
+    });
+  });
+}
+
+// ─── Crew Leaderboard ────────────────────────────────────────────────────────
+function renderCrewLeaderboard(bySite) {
+  const el = document.getElementById('crewLeaderboardPanel');
+  if (!el) return;
+
+  // Capitalise each word in a name
+  function titleCase(s) {
+    return s.toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
+  }
+
+  // canonical (lowercase) key → { displayName, totalBricks }
+  const crewMap = new Map();
+
+  for (const [, rows] of bySite) {
+    for (const row of rows) {
+      const rawName = (row.crewName || '').trim();
+      if (!rawName) continue;
+      // Skip purely numeric entries (crew count, not names)
+      if (/^\d+(\.\d+)?$/.test(rawName)) continue;
+
+      // Split on comma, semicolon, period, or whitespace — handles
+      // "Henry. Jhy. Tommy." and "Henry. Alex Tommy" and "Jake, Tom"
+      const parts = rawName
+        .split(/[,;.\s]+/)
+        .map(n => n.trim())
+        .filter(n => n.length > 1 && !/^\d+$/.test(n));
+
+      if (!parts.length) continue;
+
+      // Divide daily bricks equally among all crew on site that day
+      const share = (row.bricks || 0) / parts.length;
+
+      for (const part of parts) {
+        const key = part.toLowerCase();
+        if (!crewMap.has(key)) {
+          crewMap.set(key, { displayName: titleCase(part), totalBricks: 0 });
+        }
+        crewMap.get(key).totalBricks += share;
+      }
+    }
+  }
+
+  if (crewMap.size === 0) {
+    el.innerHTML = '';
+    return;
+  }
+
+  const sorted = [...crewMap.values()]
+    .sort((a, b) => b.totalBricks - a.totalBricks)
+    .slice(0, 10);
+
+  const maxBricks = sorted[0].totalBricks || 1;
+  const medals = ['&#127947;', '&#129352;', '&#129353;'];
+
+  const rowsHtml = sorted.map(({ displayName, totalBricks }, i) => {
+    const rankEl = i < 3 ? medals[i] : `<span style="font-size:0.8rem;color:var(--text-dim)">${i + 1}</span>`;
+    const pct    = Math.round((totalBricks / maxBricks) * 100);
+    return `
+      <div class="crew-lb-row">
+        <span class="crew-lb-rank">${rankEl}</span>
+        <span class="crew-lb-name">${escHtml(displayName)}</span>
+        <div class="crew-lb-bar-wrap"><div class="crew-lb-bar" style="width:${pct}%"></div></div>
+        <span class="crew-lb-bricks">${Math.round(totalBricks).toLocaleString()}</span>
+        <span class="crew-lb-label">bricks</span>
+      </div>`;
+  }).join('');
+
+  el.innerHTML = `
+    <div class="crew-leaderboard">
+      <div class="crew-leaderboard-header">
+        <span style="font-size:1.1rem">&#127947;</span>
+        <span class="crew-leaderboard-title">Crew Leaderboard — Total Bricks</span>
+      </div>
+      <div class="crew-leaderboard-list">${rowsHtml}</div>
+    </div>`;
+}
+
+// ─── ServiceM8 Jobs ───────────────────────────────────────────────────────────
+
+// SM8-specific proxy order: corsproxy.io forwards custom headers (incl. X-API-Key)
+const SM8_PROXIES = [
+  url => `https://corsproxy.io/?${encodeURIComponent(url)}`,
+  url => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+  url => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
+];
+
+async function fetchSM8(path) {
+  const url     = `https://api.servicem8.com/api_1.0/${path}`;
+  const headers = { 'X-API-Key': SM8_API_KEY, 'Accept': 'application/json' };
+
+  // Try direct (works if running on a server with CORS headers)
+  try {
+    const res = await fetch(url, { headers });
+    if (res.ok) return res.json();
+  } catch (e) { /* CORS on file:// expected */ }
+
+  for (const proxyFn of SM8_PROXIES) {
+    const proxyUrl = proxyFn(url);
+    try {
+      const res  = await fetch(proxyUrl, { headers });
+      const text = await res.text();
+      console.log(`[Dynasty] SM8 ${path} via ${proxyUrl.slice(0, 40)}… — HTTP ${res.status}, raw[0-300]:`, text.slice(0, 300));
+      if (!res.ok) continue;
+      if (text.trimStart().startsWith('<')) continue;
+      return JSON.parse(text);
+    } catch (e) {
+      console.warn(`[Dynasty] SM8 proxy failed (${path}):`, e.message);
+    }
+  }
+
+  throw new Error(`ServiceM8 fetch failed for ${path}`);
+}
+
+const STATUS_CLASS = {
+  'Quote':        'job-status--quote',
+  'Work Order':   'job-status--work-order',
+  'Completed':    'job-status--completed',
+  'Unsuccessful': 'job-status--unsuccessful',
+};
+
+function fmtCurrency(n) {
+  return '$' + n.toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function sumAmount(jobs) {
+  return jobs.reduce((s, j) => s + parseFloat(j.total_invoice_amount || 0), 0);
+}
+
+// ─── Shared revenue data calculator ──────────────────────────────────────────
+function calcJobsRevenue(jobs) {
+  const total       = sumAmount(jobs);
+  const completed   = sumAmount(jobs.filter(j => j.status === 'Completed'));
+  const quoted      = sumAmount(jobs.filter(j => j.status === 'Quote'));
+  const outstanding = sumAmount(jobs.filter(j => j.status === 'Work Order'));
+  const paid        = sumAmount(jobs.filter(j => isPaid(j)));
+  const unpaid      = sumAmount(jobs.filter(j => !isPaid(j) && parseFloat(j.total_invoice_amount || 0) > 0));
+
+  const now  = new Date();
+  const yr   = now.getFullYear();
+  const mo   = now.getMonth();
+
+  const thisMonthStart = new Date(yr, mo,     1);
+  const lastMonthStart = new Date(yr, mo - 1, 1);
+  const lastMonthEnd   = thisMonthStart;
+  const ytdStart       = new Date(yr, 0, 1);
+  const fyStart        = now >= new Date(yr, 6, 1) ? new Date(yr, 6, 1) : new Date(yr - 1, 6, 1);
+
+  const jobDate = j => {
+    const s = (j.date || '').substring(0, 10);
+    return s ? new Date(s + 'T00:00:00') : null;
+  };
+  const doneJobs = jobs.filter(j => j.status === 'Completed');
+  const inRange  = (j, start, end) => { const d = jobDate(j); return d && d >= start && (!end || d < end); };
+
+  const thisMonth = sumAmount(doneJobs.filter(j => inRange(j, thisMonthStart)));
+  const lastMonth = sumAmount(doneJobs.filter(j => inRange(j, lastMonthStart, lastMonthEnd)));
+  const ytd       = sumAmount(doneJobs.filter(j => inRange(j, ytdStart)));
+  const fytd      = sumAmount(doneJobs.filter(j => inRange(j, fyStart)));
+
+  const MS_PER_DAY = 1000 * 60 * 60 * 24;
+  const projYTD    = (ytd  / Math.max(1, (now - ytdStart) / MS_PER_DAY)) * 365;
+  const projFYTD   = (fytd / Math.max(1, (now - fyStart)  / MS_PER_DAY)) * 365;
+
+  const yrLabel  = String(yr);
+  const fyEndYr  = fyStart.getFullYear() + 1;
+  const fyLabel  = `FY${String(fyStart.getFullYear()).slice(2)}/${String(fyEndYr).slice(2)}`;
+
+  const fyJobUUIDs = new Set(doneJobs.filter(j => inRange(j, fyStart)).map(j => j.uuid));
+
+  const LABOUR_RATE = 85; // $/hr default
+
+  const matRevenue = sm8Materials === null ? null
+    : sm8Materials
+        .filter(m => m.active !== 0 && fyJobUUIDs.has(m.job_uuid))
+        .reduce((s, m) => {
+          const price = parseFloat(m.price || 0);
+          const qty   = parseFloat(m.quantity || 1);
+          return s + price * qty;
+        }, 0);
+
+  const labRevenue = sm8Activities === null ? null
+    : sm8Activities
+        .filter(a => a.active !== 0 && fyJobUUIDs.has(a.job_uuid))
+        .reduce((s, a) => {
+          // Derive hours from start_date / end_date; fall back to explicit fields
+          const start = a.start_date ? new Date(a.start_date) : null;
+          const end   = a.end_date   ? new Date(a.end_date)   : null;
+          let hours = 0;
+          if (start && end && end > start) {
+            hours = (end - start) / (1000 * 60 * 60);
+          } else {
+            hours = parseFloat(a.total_hours || a.hours || a.duration_hours || 0);
+          }
+          return s + hours * LABOUR_RATE;
+        }, 0);
+
+  return { total, completed, quoted, outstanding, paid, unpaid,
+           thisMonth, lastMonth, ytd, fytd,
+           projYTD, projFYTD, yrLabel, fyLabel, matRevenue, labRevenue };
+}
+
+// Shared card builder for revenue-style cards
+function revenueCard(value, label, valueCls = '', subtitle = '', cardCls = '') {
+  return `
+    <div class="jobs-revenue-card${cardCls ? ' ' + cardCls : ''}">
+      <div class="jobs-revenue-value${valueCls ? ' ' + valueCls : ''}">${value === null ? '—' : fmtCurrency(value)}</div>
+      <div class="jobs-revenue-label">${label}</div>
+      ${subtitle ? `<div class="jobs-revenue-subtitle">${subtitle}</div>` : ''}
+    </div>`;
+}
+
+// ─── Jobs tab rendering ───────────────────────────────────────────────────────
+function renderJobsRevenue(jobs) {
+  const { total, completed, quoted, outstanding, paid, unpaid,
+          thisMonth, lastMonth, ytd, fytd, fyLabel } = calcJobsRevenue(jobs);
+
+  dom.jobsRevenue.innerHTML =
+    revenueCard(total,       'Total Invoiced') +
+    revenueCard(completed,   'Completed Value',          'jobs-revenue-value--completed') +
+    revenueCard(quoted,      'Total Quoted',              'jobs-revenue-value--quote') +
+    revenueCard(outstanding, 'Outstanding (Work Orders)', 'jobs-revenue-value--outstanding') +
+    revenueCard(paid,        'Total Paid',               'jobs-revenue-value--paid') +
+    revenueCard(unpaid,      'Total Unpaid',             'jobs-revenue-value--unpaid') +
+    revenueCard(thisMonth,   'This Month',                'jobs-revenue-value--completed') +
+    revenueCard(lastMonth,   'Last Month',                'jobs-revenue-value--completed') +
+    revenueCard(ytd,         'Year to Date',              'jobs-revenue-value--completed') +
+    revenueCard(fytd,        `${fyLabel} to Date`,        'jobs-revenue-value--completed');
+}
+
+function renderJobsTabContent() {
+  const bizJobs = filterByBiz(activeJobsData);
+  renderJobsRevenue(bizJobs);
+  renderJobsFilterPills();
+  dom.jobsSearch.value = jobsSearchText;
+  dom.jobsSearch.oninput = () => {
+    jobsSearchText = dom.jobsSearch.value.toLowerCase();
+    applyJobsFilters();
+  };
+  applyJobsFilters();
+}
+
+// ─── Pipeline tab rendering ───────────────────────────────────────────────────
+function renderPipelineTabContent() {
+  const bizJobs = filterByBiz(activeJobsData);
+  const { projYTD, projFYTD, yrLabel, fyLabel } = calcJobsRevenue(bizJobs);
+
+  dom.pipelineProjected.innerHTML =
+    revenueCard(projYTD,  `${yrLabel} Projected`, 'jobs-revenue-value--projected', 'based on current pace', 'jobs-revenue-card--projected') +
+    revenueCard(projFYTD, `${fyLabel} Projected`, 'jobs-revenue-value--projected', 'based on current pace', 'jobs-revenue-card--projected');
+
+  renderJobsConversion(bizJobs, dom.pipelineConversion);
+  renderJobsOverdue(bizJobs, dom.pipelineOverdue);
+  renderStaleQuotes(bizJobs, dom.pipelineStaleQuotes);
+}
+
+// ─── Finance tab rendering ────────────────────────────────────────────────────
+function renderFinanceTabContent() {
+  const bizJobs = filterByBiz(activeJobsData);
+  const { projYTD, projFYTD, yrLabel, fyLabel } = calcJobsRevenue(bizJobs);
+
+  dom.financeProjected.innerHTML =
+    revenueCard(projYTD,  `${yrLabel} Projected`, 'jobs-revenue-value--projected', 'based on current pace', 'jobs-revenue-card--projected') +
+    revenueCard(projFYTD, `${fyLabel} Projected`, 'jobs-revenue-value--projected', 'based on current pace', 'jobs-revenue-card--projected');
+
+  renderRevenueChart(bizJobs);
+  renderTopClients(bizJobs);
+}
+
+// ─── Revenue trend chart (Finance tab) ───────────────────────────────────────
+let _chartRevenueInst = null;
+
+function renderRevenueChart(jobs) {
+  const canvas = document.getElementById('chartRevenue');
+  if (!canvas) return;
+
+  const completed = jobs.filter(j => j.status === 'Completed');
+  const now = new Date();
+  const labels = [];
+  const data   = [];
+
+  for (let i = 11; i >= 0; i--) {
+    const d     = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const start = d;
+    const end   = new Date(d.getFullYear(), d.getMonth() + 1, 1);
+    labels.push(d.toLocaleDateString('en-AU', { month: 'short', year: '2-digit' }));
+    const amount = completed
+      .filter(j => {
+        const jd = new Date((j.date || '').substring(0, 10) + 'T00:00:00');
+        return !isNaN(jd) && jd >= start && jd < end;
+      })
+      .reduce((s, j) => s + parseFloat(j.total_invoice_amount || 0), 0);
+    data.push(Math.round(amount));
+  }
+
+  if (_chartRevenueInst) { _chartRevenueInst.destroy(); _chartRevenueInst = null; }
+
+  _chartRevenueInst = new Chart(canvas, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Revenue',
+        data,
+        borderColor: '#c9a84c',
+        backgroundColor: 'rgba(201,168,76,0.07)',
+        borderWidth: 2.5,
+        pointBackgroundColor: '#c9a84c',
+        pointBorderColor: '#c9a84c',
+        pointRadius: 4,
+        pointHoverRadius: 6,
+        tension: 0.4,
+        fill: true,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#1e1e1e',
+          borderColor: 'rgba(201,168,76,0.3)',
+          borderWidth: 1,
+          titleColor: '#8a8070',
+          bodyColor: '#f0ead8',
+          callbacks: { label: ctx => ' ' + fmtCurrency(ctx.raw) }
+        }
+      },
+      scales: {
+        x: {
+          grid: { color: 'rgba(255,255,255,0.04)' },
+          ticks: { color: '#8a8070', font: { size: 11 } }
+        },
+        y: {
+          grid: { color: 'rgba(255,255,255,0.04)' },
+          ticks: {
+            color: '#8a8070',
+            font: { size: 11 },
+            callback: v => '$' + (v >= 1000 ? (v / 1000).toFixed(0) + 'k' : v)
+          }
+        }
+      }
+    }
+  });
+}
+
+// ─── Top Clients panel (Finance tab) ─────────────────────────────────────────
+function renderTopClients(jobs) {
+  const el = document.getElementById('financeTopClients');
+  if (!el) return;
+
+  const completed = jobs.filter(j => j.status === 'Completed');
+  const clientMap = new Map();
+
+  for (const j of completed) {
+    const uuid = j.company_uuid || '__unknown__';
+    const name = sm8CompanyMap.get(uuid) || (uuid === '__unknown__' ? '(Unknown Client)' : uuid.slice(0, 8));
+    if (!clientMap.has(uuid)) clientMap.set(uuid, { name, total: 0, paid: 0, unpaid: 0, count: 0 });
+    const entry = clientMap.get(uuid);
+    const amt   = parseFloat(j.total_invoice_amount || 0);
+    entry.total += amt;
+    entry.count++;
+    if (isPaid(j)) entry.paid += amt; else entry.unpaid += amt;
+  }
+
+  const sorted = [...clientMap.values()].sort((a, b) => b.total - a.total).slice(0, 10);
+
+  const labelEl = document.getElementById('financeTopClientsLabel');
+  if (labelEl) labelEl.textContent = `(top ${sorted.length} completed jobs)`;
+
+  if (!sorted.length) {
+    el.innerHTML = '<p class="finance-loading">No completed job data available</p>';
+    return;
+  }
+
+  el.innerHTML = `
+    <div class="top-clients-wrap">
+      <table class="top-clients-table">
+        <thead><tr>
+          <th>#</th>
+          <th>Client</th>
+          <th style="text-align:right">Jobs</th>
+          <th style="text-align:right">Total</th>
+          <th style="text-align:right">Paid</th>
+          <th style="text-align:right">Unpaid</th>
+        </tr></thead>
+        <tbody>
+          ${sorted.map((c, i) => `<tr>
+            <td class="top-clients-rank">${i + 1}</td>
+            <td class="top-clients-name">${escHtml(c.name)}</td>
+            <td class="top-clients-jobs">${c.count}</td>
+            <td class="top-clients-amount">${fmtCurrency(c.total)}</td>
+            <td class="top-clients-paid">${fmtCurrency(c.paid)}</td>
+            <td class="top-clients-unpaid${c.unpaid > 0 ? ' top-clients-unpaid--red' : ''}">${fmtCurrency(c.unpaid)}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>`;
+}
+
+// ─── Shared SM8 sub-renders ───────────────────────────────────────────────────
+function renderJobsConversion(jobs, container) {
+  const quoteCount = jobs.filter(j => j.status === 'Quote').length;
+  const wonCount   = jobs.filter(j => j.status === 'Work Order' || j.status === 'Completed').length;
+  const eligible   = quoteCount + wonCount;
+  const rate       = eligible > 0 ? Math.round((wonCount / eligible) * 100) : 0;
+  const pipeline   = sumAmount(jobs.filter(j => j.status === 'Quote'));
+  const rateCls    = rate >= 50 ? 'jobs-conversion-rate--good' : 'jobs-conversion-rate--poor';
+
+  const c = (val, label, cls = '') => `
+    <div class="jobs-conversion-card">
+      <div class="jobs-conversion-value${cls ? ' ' + cls : ''}">${val}</div>
+      <div class="jobs-conversion-label">${label}</div>
+    </div>`;
+
+  container.innerHTML =
+    c(quoteCount,            'Total Quotes') +
+    c(wonCount,              'Total Won') +
+    c(rate + '%',            'Conversion Rate', rateCls) +
+    c(fmtCurrency(pipeline), 'Quotes Pipeline Value');
+}
+
+function renderJobsOverdue(jobs, container) {
+  const now        = new Date();
+  const MS_PER_DAY = 1000 * 60 * 60 * 24;
+
+  const aged = jobs
+    .filter(j => j.status === 'Work Order')
+    .map(j => {
+      const d = new Date((j.date || '').substring(0, 10) + 'T00:00:00');
+      return { ...j, _d: d, _age: Math.floor((now - d) / MS_PER_DAY) };
+    })
+    .filter(j => !isNaN(j._d) && j._age > 30);
+
+  // Apply toggle: when showOldWorkOrders is off, hide those >90 days
+  const overdue = aged
+    .filter(j => showOldWorkOrders || j._age <= 90)
+    .sort((a, b) => b._age - a._age);
+
+  const uid = container.id;
+
+  // Build toggle checkbox HTML
+  const checkboxHtml = `
+    <label class="overdue-filter-label">
+      <input type="checkbox" id="${uid}ShowOld" class="overdue-filter-check" ${showOldWorkOrders ? 'checked' : ''} />
+      Show Work Orders older than 90 days
+    </label>`;
+
+  if (!overdue.length) {
+    container.innerHTML = `<div class="overdue-filter-wrap">${checkboxHtml}</div>`;
+    document.getElementById(`${uid}ShowOld`).addEventListener('change', e => {
+      showOldWorkOrders = e.target.checked;
+      renderPipelineTabContent();
+    });
+    return;
+  }
+
+  const overdueRowsHtml = overdue.map(j => {
+    const desc   = (j.job_description || '').split('\n')[0].trim() || '—';
+    const addr   = (j.job_address     || '').split('\n')[0].trim() || '—';
+    const amt    = parseFloat(j.total_invoice_amount || 0);
+    const date   = (j.date || '').substring(0, 10).split('-').reverse().join('/');
+    const ageCls = j._age > 60 ? 'jobs-overdue-days--critical' : 'jobs-overdue-days--warning';
+    return `
+      <div class="jobs-overdue-item">
+        <div class="jobs-overdue-item-main">
+          <span class="jobs-overdue-job-id">#${escHtml(j.generated_job_id || '—')}</span>
+          <span class="jobs-overdue-desc">${escHtml(desc)}</span>
+        </div>
+        <div class="jobs-overdue-item-meta">
+          <span class="jobs-overdue-addr">${escHtml(addr)}</span>
+          <span class="jobs-overdue-amount">${amt > 0 ? fmtCurrency(amt) : '—'}</span>
+          <span class="jobs-overdue-date">${date}</span>
+          <span class="jobs-overdue-days ${ageCls}">${j._age} days old</span>
+        </div>
+      </div>`;
+  }).join('');
+
+  container.innerHTML = `
+    <div class="overdue-filter-wrap">${checkboxHtml}</div>
+    <div class="jobs-overdue-card">
+      <button class="jobs-overdue-toggle" id="${uid}Toggle" aria-expanded="true">
+        <span class="jobs-overdue-icon">&#9888;</span>
+        <span class="jobs-overdue-title">Overdue / Stale Work Orders — ${overdue.length} job${overdue.length !== 1 ? 's' : ''}</span>
+        <span class="jobs-overdue-chevron" id="${uid}Chevron">&#9650;</span>
+      </button>
+      <div class="jobs-overdue-list" id="${uid}List">${overdueRowsHtml}</div>
+    </div>`;
+
+  document.getElementById(`${uid}ShowOld`).addEventListener('change', e => {
+    showOldWorkOrders = e.target.checked;
+    renderPipelineTabContent();
+  });
+
+  const toggleBtn = document.getElementById(`${uid}Toggle`);
+  const list      = document.getElementById(`${uid}List`);
+  const chevron   = document.getElementById(`${uid}Chevron`);
+  if (toggleBtn && list) {
+    toggleBtn.addEventListener('click', () => {
+      const opening = list.hidden;
+      list.hidden   = !opening;
+      chevron.innerHTML = opening ? '&#9650;' : '&#9660;';
+      toggleBtn.setAttribute('aria-expanded', String(opening));
+    });
+  }
+}
+
+// ─── Stale Quotes panel (Pipeline tab) ───────────────────────────────────────
+function renderStaleQuotes(jobs, container) {
+  if (!container) return;
+  const now        = new Date();
+  const MS_PER_DAY = 1000 * 60 * 60 * 24;
+
+  const stale = jobs
+    .filter(j => j.status === 'Quote')
+    .map(j => {
+      const d = new Date((j.date || '').substring(0, 10) + 'T00:00:00');
+      return { ...j, _d: d, _age: Math.floor((now - d) / MS_PER_DAY) };
+    })
+    .filter(j => !isNaN(j._d) && j._age >= 90)
+    .sort((a, b) => b._age - a._age);
+
+  if (!stale.length) { container.innerHTML = ''; return; }
+
+  const uid = 'staleQuotes';
+  const rowsHtml = stale.map(j => {
+    const desc   = (j.job_description || '').split('\n')[0].trim() || '—';
+    const client = sm8CompanyMap.get(j.company_uuid || '') || '—';
+    const addr   = (j.job_address    || '').split('\n')[0].trim() || '—';
+    const amt    = parseFloat(j.total_invoice_amount || 0);
+    const date   = (j.date || '').substring(0, 10).split('-').reverse().join('/');
+    return `
+      <div class="jobs-overdue-item stale-quote-item">
+        <div class="jobs-overdue-item-main">
+          <span class="jobs-overdue-job-id">#${escHtml(j.generated_job_id || '—')}</span>
+          <span class="jobs-overdue-desc">${escHtml(desc)}</span>
+          <span class="stale-quote-client">${escHtml(client)}</span>
+        </div>
+        <div class="jobs-overdue-item-meta">
+          <span class="jobs-overdue-addr">${escHtml(addr)}</span>
+          <span class="jobs-overdue-amount">${amt > 0 ? fmtCurrency(amt) : '—'}</span>
+          <span class="jobs-overdue-date">${date}</span>
+          <span class="jobs-overdue-days jobs-overdue-days--critical">${j._age} days old</span>
+          <span class="stale-quote-hint">Consider marking Unsuccessful in ServiceM8</span>
+        </div>
+      </div>`;
+  }).join('');
+
+  container.innerHTML = `
+    <div class="jobs-overdue-card stale-quotes-card">
+      <button class="jobs-overdue-toggle" id="${uid}Toggle" aria-expanded="false">
+        <span class="jobs-overdue-icon stale-quotes-icon">&#128065;</span>
+        <span class="jobs-overdue-title">Stale Quotes (90+ days) — ${stale.length} quote${stale.length !== 1 ? 's' : ''}</span>
+        <span class="jobs-overdue-chevron" id="${uid}Chevron">&#9660;</span>
+      </button>
+      <div class="jobs-overdue-list" id="${uid}List" hidden>${rowsHtml}</div>
+    </div>`;
+
+  const toggleBtn = document.getElementById(`${uid}Toggle`);
+  const list      = document.getElementById(`${uid}List`);
+  const chevron   = document.getElementById(`${uid}Chevron`);
+  if (toggleBtn && list) {
+    toggleBtn.addEventListener('click', () => {
+      const opening = list.hidden;
+      list.hidden   = !opening;
+      chevron.innerHTML = opening ? '&#9650;' : '&#9660;';
+      toggleBtn.setAttribute('aria-expanded', String(opening));
+    });
+  }
+}
+
+function renderJobsFilterPills() {
+  const options = [
+    { label: 'All',          key: '__all__'      },
+    { label: 'Quote',        key: 'Quote'        },
+    { label: 'Work Order',   key: 'Work Order'   },
+    { label: 'Completed',    key: 'Completed'    },
+    { label: 'Unsuccessful', key: 'Unsuccessful' },
+  ];
+  dom.jobsFilterPills.innerHTML = options.map(o =>
+    `<button class="jobs-filter-pill${jobsStatusFilter === o.key ? ' jobs-filter-pill--active' : ''}"
+             data-status="${escHtml(o.key)}">${escHtml(o.label)}</button>`
+  ).join('');
+
+  dom.jobsFilterPills.querySelectorAll('.jobs-filter-pill').forEach(btn => {
+    btn.addEventListener('click', () => {
+      jobsStatusFilter = btn.dataset.status;
+      renderJobsFilterPills();
+      applyJobsFilters();
+    });
+  });
+}
+
+function applyJobsFilters() {
+  let filtered = filterByBiz(activeJobsData);
+
+  if (jobsStatusFilter !== '__all__') {
+    filtered = filtered.filter(j => j.status === jobsStatusFilter);
+  }
+  if (jobsSearchText) {
+    filtered = filtered.filter(j =>
+      (j.job_description || '').toLowerCase().includes(jobsSearchText) ||
+      (j.job_address     || '').toLowerCase().includes(jobsSearchText)
+    );
+  }
+
+  dom.jobsCount.textContent = `${filtered.length} job${filtered.length !== 1 ? 's' : ''}`;
+
+  // Toggle show-profit class on the table
+  const jobsTable = document.getElementById('jobsTable');
+  if (jobsTable) jobsTable.classList.toggle('show-profit', showProfit);
+
+  const colSpan = showProfit ? 8 : 7;
+
+  if (!filtered.length) {
+    dom.jobsTableBody.innerHTML =
+      `<tr><td colspan="${colSpan}" class="table-empty">No jobs match the current filters</td></tr>`;
+    return;
+  }
+
+  const profitMap  = showProfit ? buildJobProfitMap() : null;
+  const DAILY_COST = 800;
+
+  dom.jobsTableBody.innerHTML = filtered.map(job => {
+    const desc      = (job.job_description || '').split('\n')[0].trim() || '—';
+    const client    = sm8CompanyMap.get(job.company_uuid || '') || '—';
+    const address   = (job.job_address    || '').split('\n')[0].trim() || '—';
+    const status    = job.status || '—';
+    const amount    = parseFloat(job.total_invoice_amount || 0);
+    const amountStr = amount > 0 ? fmtCurrency(amount) : '—';
+    const rawDate   = (job.date || '').substring(0, 10);
+    const dateStr   = rawDate ? rawDate.split('-').reverse().join('/') : '—';
+    const paid      = isPaid(job);
+    const payBadge  = paid
+      ? '<span class="payment-badge payment-badge--paid">Paid</span>'
+      : '<span class="payment-badge payment-badge--unpaid">Unpaid</span>';
+
+    let profitTd = '';
+    if (showProfit) {
+      const hours  = profitMap ? (profitMap.get(job.uuid) || 0) : 0;
+      if (amount > 0) {
+        const profit = amount - (hours / 8) * DAILY_COST;
+        const cls    = profit >= 0 ? 'profit-positive' : 'profit-negative';
+        profitTd = `<td class="jobs-col-profit"><span class="${cls}">${fmtCurrency(profit)}</span></td>`;
+      } else {
+        profitTd = `<td class="jobs-col-profit"><span class="profit-neutral">—</span></td>`;
+      }
+    }
+
+    return `<tr>
+      <td class="jobs-col-desc">${escHtml(desc)}</td>
+      <td class="jobs-col-client">${escHtml(client)}</td>
+      <td class="jobs-col-addr">${escHtml(address)}</td>
+      <td><span class="job-status-badge ${STATUS_CLASS[status] || ''}">${escHtml(status)}</span></td>
+      <td class="jobs-col-amount">${escHtml(amountStr)}</td>
+      <td>${payBadge}</td>
+      <td class="jobs-col-date">${escHtml(dateStr)}</td>
+      ${profitTd}
+    </tr>`;
+  }).join('');
+}
+
+// ─── Job profit map (job_uuid → estimated total hours) ───────────────────────
+function buildJobProfitMap() {
+  if (!sm8Activities) return new Map();
+  const map = new Map();
+  for (const a of sm8Activities) {
+    if (a.active === 0) continue;
+    const uuid = a.job_uuid;
+    if (!uuid) continue;
+    const start = a.start_date ? new Date(a.start_date) : null;
+    const end   = a.end_date   ? new Date(a.end_date)   : null;
+    let hours = 0;
+    if (start && end && end > start) {
+      hours = (end - start) / (1000 * 60 * 60);
+    } else {
+      hours = parseFloat(a.total_hours || a.hours || a.duration_hours || 0);
+    }
+    map.set(uuid, (map.get(uuid) || 0) + hours);
+  }
+  return map;
+}
+
+// ─── Export CSV ───────────────────────────────────────────────────────────────
+function exportCSV() {
+  let filtered = filterByBiz(activeJobsData);
+  if (jobsStatusFilter !== '__all__') {
+    filtered = filtered.filter(j => j.status === jobsStatusFilter);
+  }
+  if (jobsSearchText) {
+    filtered = filtered.filter(j =>
+      (j.job_description || '').toLowerCase().includes(jobsSearchText) ||
+      (j.job_address     || '').toLowerCase().includes(jobsSearchText)
+    );
+  }
+
+  const headers = ['Description', 'Client', 'Address', 'Status', 'Invoice', 'Payment', 'Date'];
+  if (showProfit) headers.push('Profit Est.');
+
+  const profitMap = showProfit ? buildJobProfitMap() : null;
+  const DAILY_COST = 800;
+
+  const csvRows = [headers];
+  for (const job of filtered) {
+    const desc    = (job.job_description || '').split('\n')[0].trim() || '';
+    const client  = sm8CompanyMap.get(job.company_uuid || '') || '';
+    const address = (job.job_address || '').split('\n')[0].trim() || '';
+    const status  = job.status || '';
+    const amount  = parseFloat(job.total_invoice_amount || 0);
+    const dateStr = (job.date || '').substring(0, 10).split('-').reverse().join('/');
+    const paid    = isPaid(job) ? 'Paid' : 'Unpaid';
+    const row = [desc, client, address, status, amount > 0 ? amount.toFixed(2) : '', paid, dateStr];
+    if (showProfit) {
+      const hours  = profitMap ? (profitMap.get(job.uuid) || 0) : 0;
+      const profit = amount > 0 ? amount - (hours / 8) * DAILY_COST : '';
+      row.push(profit !== '' ? profit.toFixed(2) : '');
+    }
+    csvRows.push(row);
+  }
+
+  const csv = csvRows.map(r =>
+    r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')
+  ).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url; a.download = 'dynasty-jobs.csv'; a.click();
+  URL.revokeObjectURL(url);
+}
+
+// Render the correct SM8 tab based on tabKey
+function renderSM8Tab(tabKey) {
+  if (tabKey === '__jobs__')     renderJobsTabContent();
+  else if (tabKey === '__pipeline__') renderPipelineTabContent();
+  else if (tabKey === '__finance__')  renderFinanceTabContent();
+}
+
+async function loadServiceM8Data(tabKey) {
+  if (jobsLoaded) {
+    renderSM8Tab(tabKey);
+    return;
+  }
+
+  // Show loading placeholder in whichever tab is opening
+  if (tabKey === '__jobs__') {
+    dom.jobsTableBody.innerHTML   = '<tr><td colspan="7" class="table-empty">Loading jobs…</td></tr>';
+    dom.jobsCount.textContent     = '';
+    dom.jobsRevenue.innerHTML     = '';
+    dom.jobsFilterPills.innerHTML = '';
+  } else if (tabKey === '__pipeline__') {
+    dom.pipelineProjected.innerHTML  = '';
+    dom.pipelineConversion.innerHTML = '';
+    dom.pipelineOverdue.innerHTML    = '';
+  } else if (tabKey === '__finance__') {
+    dom.financeProjected.innerHTML = '';
+  }
+
+  jobsStatusFilter = '__all__';
+  jobsSearchText   = '';
+  sm8Materials     = null;
+  sm8Activities    = null;
+
+  sm8CompanyMap = new Map();
+
+  try {
+    const [jobsRes, matsRes, actsRes, coRes] = await Promise.allSettled([
+      fetchSM8('job.json'),
+      fetchSM8('jobmaterial.json'),
+      fetchSM8('jobactivity.json'),
+      fetchSM8('company.json'),
+    ]);
+
+    if (jobsRes.status === 'rejected') throw jobsRes.reason;
+
+    if (matsRes.status === 'fulfilled') {
+      sm8Materials = matsRes.value;
+      console.log('[Dynasty] Materials loaded:', sm8Materials.length, 'entries. First entry:', JSON.stringify(sm8Materials[0], null, 2));
+    } else {
+      console.warn('[Dynasty] Materials fetch failed:', matsRes.reason?.message);
+    }
+
+    if (actsRes.status === 'fulfilled') {
+      sm8Activities = actsRes.value;
+      console.log('[Dynasty] Activities loaded:', sm8Activities.length, 'entries. First entry:', JSON.stringify(sm8Activities[0], null, 2));
+    } else {
+      console.warn('[Dynasty] Activities fetch failed:', actsRes.reason?.message);
+    }
+
+    if (coRes.status === 'fulfilled') {
+      for (const co of coRes.value) {
+        if (co.uuid) sm8CompanyMap.set(co.uuid, co.name || co.company_name || '');
+      }
+      console.log('[Dynasty] Companies loaded:', sm8CompanyMap.size, 'entries');
+    } else {
+      console.warn('[Dynasty] Companies fetch failed:', coRes.reason?.message);
+    }
+
+    const allJobs = jobsRes.value;
+    if (allJobs.length) {
+      const sample = allJobs[0];
+      console.log('[Dynasty] Job fields available:', Object.keys(sample).sort().join(', '));
+      console.log('[Dynasty] Payment-related fields:', Object.entries(sample)
+        .filter(([k]) => /pay|paid|invoice|amount|status/i.test(k))
+        .map(([k, v]) => `${k}=${JSON.stringify(v)}`).join(', '));
+    }
+
+    activeJobsData = allJobs
+      .filter(j => j.active === 1)
+      .sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
+
+    jobsLoaded = true;
+    updateTabBadges(filterByBiz(activeJobsData));
+    renderSM8Tab(tabKey);
+
+  } catch (err) {
+    if (tabKey === '__jobs__') {
+      dom.jobsTableBody.innerHTML =
+        `<tr><td colspan="7" class="table-empty">Failed to load jobs — ${escHtml(err.message)}</td></tr>`;
+    } else {
+      const errEl = tabKey === '__pipeline__' ? dom.pipelineProjected : dom.financeProjected;
+      if (errEl) errEl.innerHTML = `<p class="finance-loading finance-loading--error">Failed to load data — ${escHtml(err.message)}</p>`;
+    }
+    console.error('[Dynasty] ServiceM8 fetch failed:', err);
+  }
+}
+
 // ─── Load & orchestrate ───────────────────────────────────────────────────────
 async function loadSheet() {
   showLoading();
@@ -687,10 +2339,12 @@ async function loadSheet() {
   console.log('[Dynasty] Sites found:', [...currentBySite.keys()]);
   buildTabs(currentBySite);
 
-  // If the previously active tab no longer exists, fall back to All Jobs
-  if (activeTab !== '__all__' && !currentBySite.has(activeTab)) {
+  // If the previously active site tab no longer exists, fall back to All Jobs
+  const sm8Tabs = new Set(['__jobs__', '__pipeline__', '__finance__']);
+  if (activeTab !== '__all__' && !sm8Tabs.has(activeTab) && !currentBySite.has(activeTab)) {
     activeTab = '__all__';
   }
+  jobsLoaded = false; // force re-fetch next time any SM8 tab is visited
   switchTab(activeTab);
 
   dom.lastUpdated.textContent = 'Last updated: ' + new Date().toLocaleTimeString();
@@ -712,6 +2366,12 @@ async function loadSheet() {
 dom.btnRefresh.addEventListener('click', loadSheet);
 
 document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    const settingsOv = document.getElementById('settingsOverlay');
+    if (settingsOv && settingsOv.classList.contains('is-open')) { settingsOv.classList.remove('is-open'); return; }
+    const modal = document.getElementById('siteModal');
+    if (modal && modal.classList.contains('is-open')) { closeSiteModal(); return; }
+  }
   if ((e.ctrlKey || e.metaKey) && e.key === 'r') {
     e.preventDefault();
     loadSheet();
@@ -720,5 +2380,121 @@ document.addEventListener('keydown', e => {
 
 setInterval(loadSheet, 5 * 60 * 1000);
 
+// ─── Business toggle init ─────────────────────────────────────────────────────
+(function initBizToggle() {
+  const container = document.getElementById('bizToggle');
+  if (!container) return;
+
+  // Reflect persisted state
+  container.querySelectorAll('.biz-toggle-btn').forEach(btn => {
+    btn.classList.toggle('biz-toggle-btn--active', btn.dataset.biz === activeBiz);
+  });
+
+  container.addEventListener('click', e => {
+    const btn = e.target.closest('.biz-toggle-btn');
+    if (!btn) return;
+    activeBiz = btn.dataset.biz;
+    localStorage.setItem(BIZ_KEY, activeBiz);
+    container.querySelectorAll('.biz-toggle-btn').forEach(b => {
+      b.classList.toggle('biz-toggle-btn--active', b.dataset.biz === activeBiz);
+    });
+    // Re-render whichever SM8 tab is active
+    if (jobsLoaded) renderSM8Tab(activeTab);
+  });
+})();
+
+// ─── Settings modal (Change PIN) ─────────────────────────────────────────────
+(function initSettings() {
+  const btnSettings = document.getElementById('btnSettings');
+  const overlay     = document.getElementById('settingsOverlay');
+  const closeBtn    = document.getElementById('settingsClose');
+  const saveBtn     = document.getElementById('settingsSave');
+  const msgEl       = document.getElementById('settingsMsg');
+  const currentInp  = document.getElementById('settingsCurrent');
+  const newInp      = document.getElementById('settingsNew');
+  const confirmInp  = document.getElementById('settingsConfirm');
+
+  if (!btnSettings || !overlay) return;
+
+  function openSettings() {
+    currentInp.value = '';
+    newInp.value     = '';
+    confirmInp.value = '';
+    msgEl.textContent = '';
+    msgEl.className   = 'settings-msg';
+    overlay.classList.add('is-open');
+    setTimeout(() => currentInp.focus(), 50);
+  }
+
+  function closeSettings() {
+    overlay.classList.remove('is-open');
+  }
+
+  function savePin() {
+    const cur  = currentInp.value;
+    const nw   = newInp.value;
+    const conf = confirmInp.value;
+
+    if (cur !== currentFullPin) {
+      msgEl.textContent = 'Current PIN is incorrect.';
+      msgEl.className   = 'settings-msg settings-msg--err';
+      currentInp.value  = '';
+      currentInp.focus();
+      return;
+    }
+    if (nw.length < 4) {
+      msgEl.textContent = 'New PIN must be 4 digits.';
+      msgEl.className   = 'settings-msg settings-msg--err';
+      newInp.focus();
+      return;
+    }
+    if (nw !== conf) {
+      msgEl.textContent = 'New PIN and confirmation do not match.';
+      msgEl.className   = 'settings-msg settings-msg--err';
+      confirmInp.value  = '';
+      confirmInp.focus();
+      return;
+    }
+
+    currentFullPin = nw;
+    localStorage.setItem(PIN_KEY, nw);
+    msgEl.textContent = 'PIN updated successfully!';
+    msgEl.className   = 'settings-msg settings-msg--ok';
+    newInp.value = confirmInp.value = currentInp.value = '';
+    setTimeout(closeSettings, 1500);
+  }
+
+  btnSettings.addEventListener('click', openSettings);
+  closeBtn.addEventListener('click', closeSettings);
+  saveBtn.addEventListener('click', savePin);
+  overlay.addEventListener('click', e => { if (e.target === overlay) closeSettings(); });
+  [currentInp, newInp, confirmInp].forEach(inp =>
+    inp.addEventListener('keydown', e => { if (e.key === 'Enter') savePin(); })
+  );
+})();
+
+// ─── Export CSV button ────────────────────────────────────────────────────────
+(function initExportCSV() {
+  const btn = document.getElementById('btnExportCSV');
+  if (!btn) return;
+  btn.addEventListener('click', () => {
+    if (!jobsLoaded) { showToast('Jobs not loaded yet — please wait.', 'error'); return; }
+    exportCSV();
+  });
+})();
+
+// ─── Show Profit toggle ───────────────────────────────────────────────────────
+(function initShowProfit() {
+  const btn = document.getElementById('btnShowProfit');
+  if (!btn) return;
+  btn.addEventListener('click', () => {
+    showProfit = !showProfit;
+    btn.classList.toggle('jobs-action-btn--active', showProfit);
+    btn.textContent = showProfit ? '✕ Hide Profit' : '$ Show Profit';
+    if (jobsLoaded) applyJobsFilters();
+  });
+})();
+
 // ─── Start ────────────────────────────────────────────────────────────────────
+_initModalOverlayClick();
 loadSheet();

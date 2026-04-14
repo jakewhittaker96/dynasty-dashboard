@@ -9,18 +9,112 @@
 </head>
 <body>
 
+  <!-- ===== LOGIN SCREEN ===== -->
+  <div id="loginScreen" class="login-screen">
+    <div class="login-card">
+      <div class="login-logo">
+        <svg style="width:200px;height:auto;" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 626.82 103.8" aria-label="Dynasty OS" role="img">
+          <defs>
+            <linearGradient id="lg1" x1="74.66" y1="-3.95" x2="74.66" y2="97.97" gradientUnits="userSpaceOnUse">
+              <stop offset="0" stop-color="#e0aa3e"/><stop offset=".45" stop-color="#ba8d34"/><stop offset="1" stop-color="#e0aa3e"/>
+            </linearGradient>
+            <linearGradient id="lg2" x1="24.89" y1="-3.95" x2="24.89" y2="97.97" href="#lg1"/>
+            <linearGradient id="lg3" x1="6.3" y1="6.13" x2="85.09" y2="84.92" href="#lg1"/>
+            <linearGradient id="lg4" x1="6.35" y1="6.08" x2="85.13" y2="84.87" gradientTransform="translate(49.68 -20.73) rotate(45)" href="#lg1"/>
+            <linearGradient id="lg5" x1="6.35" y1="6.08" x2="85.13" y2="84.87" href="#lg1"/>
+          </defs>
+          <g>
+            <g>
+              <path fill="url(#lg1)" d="M99.55,49.5v.1h-18.67v-31.02h-31.11V0h.43c7.99,0,15.92,1.77,22.98,5.51.5.26.99.54,1.48.81,7.67,4.41,14.07,10.8,18.48,18.48.29.5.57,1,.84,1.51,3.78,7.12,5.56,15.13,5.56,23.19Z"/>
+              <path fill="url(#lg2)" d="M49.78,80.62v18.58h-1.34c-7.62,0-15.19-1.65-21.93-5.2-.55-.29-1.09-.58-1.62-.89-7.75-4.46-14.19-10.93-18.61-18.7-.28-.5-.56-1-.82-1.51-3.71-7.08-5.46-15.02-5.46-23.02v-.27h18.84v31.02h30.94Z"/>
+              <rect fill="url(#lg3)" x="18.84" y="18.58" width="6.05" height="6.23"/>
+              <rect fill="url(#lg4)" x="38.61" y="38.35" width="22.5" height="22.5" transform="translate(-20.47 49.79) rotate(-45)"/>
+              <rect fill="url(#lg5)" x="74.67" y="74.4" width="6.22" height="6.22"/>
+              <path fill="#fff" d="M24.89,6.33v18.47H6.42c4.42-7.67,10.81-14.06,18.47-18.47Z"/>
+              <path fill="#fff" d="M93.29,74.4c-4.42,7.78-10.87,14.26-18.62,18.71v-18.71h18.62Z"/>
+              <rect fill="#fff" x="38.61" y="38.35" width="22.5" height="22.5" transform="translate(-20.47 49.79) rotate(-45)"/>
+            </g>
+            <g>
+              <path fill="#fff" d="M129.58,14.3h25.56c19.49,0,34.11,14.52,34.11,35.3s-14.62,35.3-34.11,35.3h-25.56V14.3ZM154.63,72.07c13.42,0,20.39-9.15,20.39-22.47s-6.96-22.47-20.39-22.47h-11.44v44.95h11.44Z"/>
+              <path fill="#fff" d="M211.38,84.4l-21.48-51.21h13.62l14.32,35.9,14.22-35.9h13.72l-21.78,51.71-8.05,18.89h-13.03l8.45-19.39Z"/>
+              <path fill="#fff" d="M248.19,33.19h13.32v7.06c2.88-4.57,8.05-8.05,15.81-8.05,10.64,0,19.59,6.56,19.59,22.28v30.43h-13.32v-28.24c0-7.56-4.08-12.53-11.04-12.53s-11.04,4.97-11.04,12.53v28.24h-13.32v-51.71Z"/>
+              <path fill="#fff" d="M301.35,59.05c0-17.9,12.83-26.85,24.86-26.85,9.25,0,15.21,5.07,16.51,7.96h.3v-6.96h13.32v51.71h-13.32v-6.96h-.3c-1.29,2.88-7.26,7.96-16.51,7.96-12.03,0-24.86-8.95-24.86-26.85ZM328.9,73.96c7.46,0,14.42-5.17,14.42-14.91s-6.96-14.92-14.42-14.92-14.42,5.27-14.42,14.92,6.96,14.91,14.42,14.91Z"/>
+              <path fill="#fff" d="M360.61,71.38l10.64-2.88c.99,3.38,3.48,6.86,8.55,6.86,3.38,0,6.66-1.69,6.66-5.37,0-2.49-1.59-4.28-5.67-5.77l-6.36-2.39c-8.55-3.08-12.13-8.55-12.13-14.82,0-9.25,8.15-14.82,17.9-14.82s16.21,5.27,17.9,13.23l-10.44,2.69c-1.39-4.18-4.08-5.47-6.86-5.47-3.48,0-5.57,1.99-5.57,4.48,0,2.19,1.29,4.08,5.37,5.47l5.77,2.19c6.36,2.29,13.32,6.07,13.32,15.21,0,10.34-8.85,15.91-19.69,15.91-10.24,0-17.8-4.97-19.39-14.52Z"/>
+              <path fill="#fff" d="M454.7,84.4l-21.48-51.21h13.62l14.32,35.9,14.22-35.9h13.72l-21.78,51.71-8.05,18.89h-13.03l8.45-19.39Z"/>
+              <path fill="#fff" d="M503.67,49.6c0-21.68,16.61-36.3,36.1-36.3s36.1,14.62,36.1,36.3-16.71,36.3-36.1,36.3-36.1-14.62-36.1-36.3ZM539.77,75.16c13.13,0,24.56-10.04,24.56-25.56s-11.44-25.56-24.56-25.56-24.56,10.04-24.56,25.56,11.44,25.56,24.56,25.56Z"/>
+              <path fill="#fff" d="M578.99,68.49l9.15-4.18c1.99,6.36,7.26,11.24,15.02,11.24,6.46,0,12.03-3.38,12.03-10.44,0-6.17-4.08-8.85-11.73-11.93l-4.57-1.79c-10.04-3.98-17.2-9.45-17.2-19.49,0-11.44,9.45-18.6,21.08-18.6s19.09,7.26,22.08,14.82l-8.45,4.57c-2.88-5.97-7.16-9.25-13.23-9.25s-10.34,3.08-10.34,8.55c0,4.28,2.59,7.56,10.54,10.74l4.77,1.89c12.03,4.77,18.69,10.24,18.69,20.58,0,13.72-11.73,20.68-23.57,20.68s-21.78-7.16-24.26-17.4Z"/>
+              <path fill="#fff" d="M422.87,85.5h-1.69v-.06c.55.04,1.11.06,1.69.06Z"/>
+              <path fill="#fff" d="M422.51,72.09c-.96-.99-1.34-2.33-1.34-3.7v-24.55h10.64v-10.65h-10.64v-11.52h-13.42v11.52h-7.36v10.65h7.36v29.37c0,6.79,5.5,12.29,12.29,12.29h1.13v-.06c.55.04,1.11.06,1.69.06h9.04v-13.42h-9.4Z"/>
+            </g>
+          </g>
+        </svg>
+      </div>
+      <p class="login-subtitle">Operations Dashboard</p>
+      <div class="login-form">
+        <label class="login-label" for="pinInput">Enter PIN</label>
+        <input id="pinInput" class="login-pin" type="password" inputmode="numeric"
+               maxlength="4" placeholder="••••" autocomplete="off" />
+        <button id="loginBtn" class="login-btn">Login</button>
+        <p id="loginError" class="login-error" hidden>Incorrect PIN. Try again.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== DASHBOARD (hidden until authenticated) ===== -->
+  <div id="dashboardRoot" hidden>
+
   <!-- ===== HEADER ===== -->
   <header class="site-header">
     <div class="header-inner">
       <div class="brand">
-        <div class="brand-icon">&#9632;</div>
-        <div>
-          <h1 class="brand-name">DYNASTY</h1>
-          <span class="brand-sub">Bricklaying Operations</span>
-        </div>
+        <svg style="width:220px;height:auto;" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 626.82 103.8" aria-label="Dynasty OS" role="img">
+          <defs>
+            <linearGradient id="dyn-lg1" x1="74.66" y1="-3.95" x2="74.66" y2="97.97" gradientUnits="userSpaceOnUse">
+              <stop offset="0" stop-color="#e0aa3e"/>
+              <stop offset=".45" stop-color="#ba8d34"/>
+              <stop offset="1" stop-color="#e0aa3e"/>
+            </linearGradient>
+            <linearGradient id="dyn-lg2" x1="24.89" y1="-3.95" x2="24.89" y2="97.97" href="#dyn-lg1"/>
+            <linearGradient id="dyn-lg3" x1="6.3" y1="6.13" x2="85.09" y2="84.92" href="#dyn-lg1"/>
+            <linearGradient id="dyn-lg4" x1="6.35" y1="6.08" x2="85.13" y2="84.87" gradientTransform="translate(49.68 -20.73) rotate(45)" href="#dyn-lg1"/>
+            <linearGradient id="dyn-lg5" x1="6.35" y1="6.08" x2="85.13" y2="84.87" href="#dyn-lg1"/>
+          </defs>
+          <g>
+            <g>
+              <path fill="url(#dyn-lg1)" d="M99.55,49.5v.1h-18.67v-31.02h-31.11V0h.43c7.99,0,15.92,1.77,22.98,5.51.5.26.99.54,1.48.81,7.67,4.41,14.07,10.8,18.48,18.48.29.5.57,1,.84,1.51,3.78,7.12,5.56,15.13,5.56,23.19Z"/>
+              <path fill="url(#dyn-lg2)" d="M49.78,80.62v18.58h-1.34c-7.62,0-15.19-1.65-21.93-5.2-.55-.29-1.09-.58-1.62-.89-7.75-4.46-14.19-10.93-18.61-18.7-.28-.5-.56-1-.82-1.51-3.71-7.08-5.46-15.02-5.46-23.02v-.27h18.84v31.02h30.94Z"/>
+              <rect fill="url(#dyn-lg3)" x="18.84" y="18.58" width="6.05" height="6.23"/>
+              <rect fill="url(#dyn-lg4)" x="38.61" y="38.35" width="22.5" height="22.5" transform="translate(-20.47 49.79) rotate(-45)"/>
+              <rect fill="url(#dyn-lg5)" x="74.67" y="74.4" width="6.22" height="6.22"/>
+              <path fill="#fff" d="M24.89,6.33v18.47H6.42c4.42-7.67,10.81-14.06,18.47-18.47Z"/>
+              <path fill="#fff" d="M93.29,74.4c-4.42,7.78-10.87,14.26-18.62,18.71v-18.71h18.62Z"/>
+              <rect fill="#fff" x="38.61" y="38.35" width="22.5" height="22.5" transform="translate(-20.47 49.79) rotate(-45)"/>
+            </g>
+            <g>
+              <path fill="#fff" d="M129.58,14.3h25.56c19.49,0,34.11,14.52,34.11,35.3s-14.62,35.3-34.11,35.3h-25.56V14.3ZM154.63,72.07c13.42,0,20.39-9.15,20.39-22.47s-6.96-22.47-20.39-22.47h-11.44v44.95h11.44Z"/>
+              <path fill="#fff" d="M211.38,84.4l-21.48-51.21h13.62l14.32,35.9,14.22-35.9h13.72l-21.78,51.71-8.05,18.89h-13.03l8.45-19.39Z"/>
+              <path fill="#fff" d="M248.19,33.19h13.32v7.06c2.88-4.57,8.05-8.05,15.81-8.05,10.64,0,19.59,6.56,19.59,22.28v30.43h-13.32v-28.24c0-7.56-4.08-12.53-11.04-12.53s-11.04,4.97-11.04,12.53v28.24h-13.32v-51.71Z"/>
+              <path fill="#fff" d="M301.35,59.05c0-17.9,12.83-26.85,24.86-26.85,9.25,0,15.21,5.07,16.51,7.96h.3v-6.96h13.32v51.71h-13.32v-6.96h-.3c-1.29,2.88-7.26,7.96-16.51,7.96-12.03,0-24.86-8.95-24.86-26.85ZM328.9,73.96c7.46,0,14.42-5.17,14.42-14.91s-6.96-14.92-14.42-14.92-14.42,5.27-14.42,14.92,6.96,14.91,14.42,14.91Z"/>
+              <path fill="#fff" d="M360.61,71.38l10.64-2.88c.99,3.38,3.48,6.86,8.55,6.86,3.38,0,6.66-1.69,6.66-5.37,0-2.49-1.59-4.28-5.67-5.77l-6.36-2.39c-8.55-3.08-12.13-8.55-12.13-14.82,0-9.25,8.15-14.82,17.9-14.82s16.21,5.27,17.9,13.23l-10.44,2.69c-1.39-4.18-4.08-5.47-6.86-5.47-3.48,0-5.57,1.99-5.57,4.48,0,2.19,1.29,4.08,5.37,5.47l5.77,2.19c6.36,2.29,13.32,6.07,13.32,15.21,0,10.34-8.85,15.91-19.69,15.91-10.24,0-17.8-4.97-19.39-14.52Z"/>
+              <path fill="#fff" d="M454.7,84.4l-21.48-51.21h13.62l14.32,35.9,14.22-35.9h13.72l-21.78,51.71-8.05,18.89h-13.03l8.45-19.39Z"/>
+              <path fill="#fff" d="M503.67,49.6c0-21.68,16.61-36.3,36.1-36.3s36.1,14.62,36.1,36.3-16.71,36.3-36.1,36.3-36.1-14.62-36.1-36.3ZM539.77,75.16c13.13,0,24.56-10.04,24.56-25.56s-11.44-25.56-24.56-25.56-24.56,10.04-24.56,25.56,11.44,25.56,24.56,25.56Z"/>
+              <path fill="#fff" d="M578.99,68.49l9.15-4.18c1.99,6.36,7.26,11.24,15.02,11.24,6.46,0,12.03-3.38,12.03-10.44,0-6.17-4.08-8.85-11.73-11.93l-4.57-1.79c-10.04-3.98-17.2-9.45-17.2-19.49,0-11.44,9.45-18.6,21.08-18.6s19.09,7.26,22.08,14.82l-8.45,4.57c-2.88-5.97-7.16-9.25-13.23-9.25s-10.34,3.08-10.34,8.55c0,4.28,2.59,7.56,10.54,10.74l4.77,1.89c12.03,4.77,18.69,10.24,18.69,20.58,0,13.72-11.73,20.68-23.57,20.68s-21.78-7.16-24.26-17.4Z"/>
+              <path fill="#fff" d="M422.87,85.5h-1.69v-.06c.55.04,1.11.06,1.69.06Z"/>
+              <path fill="#fff" d="M422.51,72.09c-.96-.99-1.34-2.33-1.34-3.7v-24.55h10.64v-10.65h-10.64v-11.52h-13.42v11.52h-7.36v10.65h7.36v29.37c0,6.79,5.5,12.29,12.29,12.29h1.13v-.06c.55.04,1.11.06,1.69.06h9.04v-13.42h-9.4Z"/>
+            </g>
+          </g>
+        </svg>
       </div>
       <div class="header-right">
+        <div class="biz-toggle" id="bizToggle" role="group" aria-label="Business filter">
+          <button class="biz-toggle-btn biz-toggle-btn--active" data-biz="all">All</button>
+          <button class="biz-toggle-btn" data-biz="bricklaying">Bricklaying</button>
+          <button class="biz-toggle-btn" data-biz="pressure">Pressure Cleaning</button>
+        </div>
         <span class="last-updated" id="lastUpdated">Last updated: —</span>
+        <button class="btn-settings" id="btnSettings" title="Settings">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        </button>
         <button class="btn-refresh" id="btnRefresh" title="Refresh data">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
         </button>
@@ -93,8 +187,29 @@
         <!-- built dynamically -->
       </div>
 
-      <!-- Weekly & monthly summary -->
-      <section class="weekly-summary" id="weeklySummary"></section>
+      <!-- Job completion countdown (per site) -->
+      <section id="completionCountdown"></section>
+
+      <!-- Weekly bricks trend chart -->
+      <section class="weekly-trend-card" id="weeklyTrendSection">
+        <h2 class="card-title"><span class="card-title-icon">&#128200;</span> Weekly Bricks Trend</h2>
+        <div class="chart-wrap chart-wrap--wide"><canvas id="chartWeeklyTrend"></canvas></div>
+      </section>
+
+      <!-- Materials needed tomorrow (all sites) -->
+      <section id="allMaterialsPanel"></section>
+
+      <!-- Weekly & monthly summary + active problems sidebar -->
+      <div class="summary-alerts-row">
+        <section class="weekly-summary" id="weeklySummary"></section>
+        <div id="alertsBanner"></div>
+      </div>
+
+      <!-- Completed sites collapsible panel -->
+      <div id="completedSitesPanel"></div>
+
+      <!-- Crew leaderboard -->
+      <div id="crewLeaderboardPanel"></div>
 
     </div><!-- /#viewAll -->
 
@@ -261,6 +376,112 @@
 
     </div><!-- /#viewSite -->
 
+
+    <!-- ======================================================
+         SERVICEM8 JOBS VIEW
+         ====================================================== -->
+    <div id="viewJobs" hidden>
+
+      <section class="jobs-section">
+
+        <!-- Revenue summary cards (rows 1 & 2 only) -->
+        <div class="jobs-revenue-grid" id="jobsRevenue"></div>
+
+        <!-- Action buttons row -->
+        <div class="jobs-actions-row">
+          <button class="jobs-action-btn" id="btnExportCSV">&#8681; Export CSV</button>
+          <button class="jobs-action-btn" id="btnShowProfit">&#36; Show Profit</button>
+        </div>
+
+        <!-- Search + filter controls -->
+        <div class="jobs-controls">
+          <input type="search" id="jobsSearch" class="jobs-search"
+                 placeholder="Search description or address…" autocomplete="off">
+          <div class="jobs-filter-pills" id="jobsFilterPills"></div>
+          <span class="jobs-count" id="jobsCount"></span>
+        </div>
+
+        <!-- Jobs table -->
+        <div class="table-card jobs-table-card">
+          <div class="table-wrap">
+            <table class="data-table" id="jobsTable">
+              <thead>
+                <tr>
+                  <th>Description</th>
+                  <th>Client</th>
+                  <th>Address</th>
+                  <th>Status</th>
+                  <th>Invoice</th>
+                  <th>Payment</th>
+                  <th>Date</th>
+                  <th class="jobs-col-profit" id="thProfit">Profit Est.</th>
+                </tr>
+              </thead>
+              <tbody id="jobsTableBody">
+                <tr><td colspan="7" class="table-empty">Loading jobs…</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </section>
+
+    </div><!-- /#viewJobs -->
+
+
+    <!-- ======================================================
+         PIPELINE VIEW
+         ====================================================== -->
+    <div id="viewPipeline" hidden>
+
+      <section class="jobs-section">
+
+        <!-- Projected revenue cards -->
+        <div class="sm8-section-label">Projected Revenue</div>
+        <div class="sm8-2col-grid" id="pipelineProjected"></div>
+
+        <!-- Quote conversion stats -->
+        <div class="sm8-section-label">Quote Conversion</div>
+        <div class="jobs-conversion-grid" id="pipelineConversion"></div>
+
+        <!-- Overdue / stale jobs -->
+        <div id="pipelineOverdue"></div>
+
+        <!-- Stale quotes (90+ days) -->
+        <div id="pipelineStaleQuotes"></div>
+
+      </section>
+
+    </div><!-- /#viewPipeline -->
+
+
+    <!-- ======================================================
+         FINANCE VIEW
+         ====================================================== -->
+    <div id="viewFinance" hidden>
+
+      <section class="jobs-section">
+
+        <!-- Projected revenue cards -->
+        <div class="sm8-section-label">Projected Revenue</div>
+        <div class="sm8-2col-grid" id="financeProjected"></div>
+
+        <!-- Revenue trend chart -->
+        <div class="sm8-section-label">Revenue Trend — Last 12 Months</div>
+        <div class="finance-chart-section">
+          <div class="finance-chart-wrap">
+            <canvas id="chartRevenue"></canvas>
+          </div>
+        </div>
+
+        <!-- Top Clients -->
+        <div class="sm8-section-label">Top Clients <span class="sm8-section-fy" id="financeTopClientsLabel"></span></div>
+        <div id="financeTopClients"></div>
+
+      </section>
+
+    </div><!-- /#viewFinance -->
+
   </main>
 
   <footer class="site-footer">
@@ -268,6 +489,59 @@
     <span class="footer-sep">|</span>
     <span>Data sourced from Google Sheets</span>
   </footer>
+
+  <!-- ======================================================
+       SITE DETAIL MODAL
+       ====================================================== -->
+  <div id="siteModal" class="site-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modalSiteName">
+    <div class="site-modal">
+      <div class="site-modal-header">
+        <div class="site-modal-title">
+          <span class="site-modal-name" id="modalSiteName"></span>
+          <span id="modalSiteBadge" class="site-card-badge"></span>
+        </div>
+        <div class="site-modal-actions">
+          <button class="btn-mark-complete" id="modalCompleteBtn">&#10003; Mark as Complete</button>
+          <button class="btn-modal-close" id="siteModalClose" aria-label="Close site details">&#10005;</button>
+        </div>
+      </div>
+      <div class="site-modal-body" id="siteModalBody"></div>
+    </div>
+  </div>
+
+  <!-- Settings Modal -->
+  <div id="settingsOverlay" class="settings-overlay" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+    <div class="settings-modal">
+      <div class="settings-header">
+        <span class="settings-title" id="settingsTitle">&#9881; Settings — Change PIN</span>
+        <button class="btn-modal-close" id="settingsClose" aria-label="Close settings">&#10005;</button>
+      </div>
+      <div class="settings-body">
+        <div>
+          <label class="settings-label" for="settingsCurrent">Current PIN</label>
+          <input id="settingsCurrent" class="settings-input" type="password" inputmode="numeric"
+                 maxlength="4" placeholder="••••" autocomplete="off" />
+        </div>
+        <div>
+          <label class="settings-label" for="settingsNew">New PIN</label>
+          <input id="settingsNew" class="settings-input" type="password" inputmode="numeric"
+                 maxlength="4" placeholder="••••" autocomplete="off" />
+        </div>
+        <div>
+          <label class="settings-label" for="settingsConfirm">Confirm New PIN</label>
+          <input id="settingsConfirm" class="settings-input" type="password" inputmode="numeric"
+                 maxlength="4" placeholder="••••" autocomplete="off" />
+        </div>
+        <button class="settings-save-btn" id="settingsSave">Save PIN</button>
+        <p class="settings-msg" id="settingsMsg"></p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Client Portal Watermark (shown only in portal mode) -->
+  <div id="portalWatermark" class="portal-watermark" hidden>Client View</div>
+
+  </div><!-- /#dashboardRoot -->
 
   <script src="app.js"></script>
 </body>
