@@ -3648,7 +3648,6 @@ async function sendChatMessage() {
 (function initAIChat() {
   const bubble   = document.getElementById('aiChatBubble');
   const panel    = document.getElementById('aiChatPanel');
-  const closeBtn = document.getElementById('aiChatClose');
   const sendBtn  = document.getElementById('aiChatSend');
   const inp      = document.getElementById('aiChatInput');
   if (!bubble || !panel) return;
@@ -3657,7 +3656,14 @@ async function sendChatMessage() {
     panel.hidden = !panel.hidden;
     if (!panel.hidden) inp?.focus();
   });
-  closeBtn?.addEventListener('click', () => { panel.hidden = true; });
+
+  // Use onclick on the element directly — more reliable than addEventListener
+  // when the panel lives outside #dashboardRoot
+  const closeBtn = document.getElementById('aiChatClose');
+  if (closeBtn) {
+    closeBtn.onclick = () => { panel.hidden = true; };
+  }
+
   sendBtn?.addEventListener('click', sendChatMessage);
   inp?.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChatMessage(); } });
 })();
