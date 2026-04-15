@@ -1940,6 +1940,87 @@ setInterval(loadSheet, 5 * 60 * 1000);
   );
 })();
 
+// ─── Business Profile ─────────────────────────────────────────────────────────
+const BP_KEY = 'dynasty-business-profile';
+
+function loadBusinessProfile() {
+  try { return JSON.parse(localStorage.getItem(BP_KEY) || '{}'); } catch { return {}; }
+}
+function saveBusinessProfile(obj) { localStorage.setItem(BP_KEY, JSON.stringify(obj)); }
+
+(function initBusinessProfile() {
+  const saveBtn    = document.getElementById('btnSaveProfile');
+  const uploadBtn  = document.getElementById('btnUploadLogo');
+  const logoFile   = document.getElementById('bp_logo_file');
+  const logoStatus = document.getElementById('bp_logo_status');
+  const logoCanvas = document.getElementById('bp_logo_preview');
+  const profileMsg = document.getElementById('profileMsg');
+  if (!saveBtn) return;
+
+  // Populate fields from saved profile when settings opens
+  const settingsBtn = document.getElementById('btnSettings');
+  settingsBtn?.addEventListener('click', () => {
+    const p = loadBusinessProfile();
+    ['name','abn','phone','email','address','terms'].forEach(k => {
+      const el = document.getElementById('bp_' + k);
+      if (el) el.value = p[k] || '';
+    });
+    if (p.logo && logoCanvas) {
+      showLogoPreview(p.logo);
+    }
+  }, { capture: true }); // runs before the overlay opens
+
+  // Logo upload
+  uploadBtn?.addEventListener('click', () => logoFile?.click());
+  logoFile?.addEventListener('change', () => {
+    const file = logoFile.files[0];
+    if (!file) return;
+    if (file.size > 500 * 1024) {
+      if (logoStatus) logoStatus.textContent = 'Image too large — max 500 KB';
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = e => {
+      showLogoPreview(e.target.result);
+      if (logoStatus) logoStatus.textContent = file.name;
+    };
+    reader.readAsDataURL(file);
+  });
+
+  function showLogoPreview(dataUrl) {
+    if (!logoCanvas) return;
+    const img = new Image();
+    img.onload = () => {
+      const maxW = 240, maxH = 96;
+      const scale = Math.min(maxW / img.width, maxH / img.height, 1);
+      logoCanvas.width  = Math.round(img.width  * scale);
+      logoCanvas.height = Math.round(img.height * scale);
+      logoCanvas.getContext('2d').drawImage(img, 0, 0, logoCanvas.width, logoCanvas.height);
+      logoCanvas.style.display = '';
+    };
+    img.src = dataUrl;
+    logoCanvas._dataUrl = dataUrl; // store for saving
+  }
+
+  saveBtn.addEventListener('click', () => {
+    const p = {
+      name:    document.getElementById('bp_name')?.value.trim()    || '',
+      abn:     document.getElementById('bp_abn')?.value.trim()     || '',
+      phone:   document.getElementById('bp_phone')?.value.trim()   || '',
+      email:   document.getElementById('bp_email')?.value.trim()   || '',
+      address: document.getElementById('bp_address')?.value.trim() || '',
+      terms:   document.getElementById('bp_terms')?.value.trim()   || '',
+      logo:    logoCanvas?._dataUrl || loadBusinessProfile().logo   || '',
+    };
+    saveBusinessProfile(p);
+    if (profileMsg) {
+      profileMsg.textContent = 'Profile saved!';
+      profileMsg.className   = 'settings-msg settings-msg--ok';
+      setTimeout(() => { profileMsg.textContent = ''; }, 2500);
+    }
+  });
+})();
+
 // ─── Export CSV button ────────────────────────────────────────────────────────
 (function initExportCSV() {
   const btn = document.getElementById('btnExportCSV');

@@ -334,23 +334,42 @@ Keep it professional, clear, and practical. Australian English throughout.`;
 
 // ── PDF generation ────────────────────────────────────────────────────────────
 function generateQuotePDF(quoteText, fields, calc) {
-  const today     = new Date().toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' });
-  const validUntil= new Date(Date.now() + 30 * 86400000).toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' });
+  const bp         = (typeof loadBusinessProfile === 'function') ? loadBusinessProfile() : {};
+  const bizName    = bp.name    || 'Dynasty Bricklaying & Pressure Cleaning';
+  const bizABN     = bp.abn     || '';
+  const bizPhone   = bp.phone   || '';
+  const bizEmail   = bp.email   || '';
+  const bizAddress = bp.address || '';
+  const bizTerms   = bp.terms   || '30% deposit on acceptance, 70% on completion. Payment by bank transfer.';
+  const bizLogo    = bp.logo    || '';
+
+  const today      = new Date().toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' });
+  const validUntil = new Date(Date.now() + 30 * 86400000).toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' });
+
+  const logoHtml = bizLogo
+    ? `<img src="${bizLogo}" alt="Logo" style="max-height:56px;max-width:160px;object-fit:contain;display:block;margin-bottom:6px" />`
+    : '';
+  const contactLines = [
+    bizABN     ? `ABN: ${escHtml(bizABN)}`         : '',
+    bizPhone   ? `Phone: ${escHtml(bizPhone)}`      : '',
+    bizEmail   ? `Email: ${escHtml(bizEmail)}`      : '',
+    bizAddress ? escHtml(bizAddress)                 : '',
+  ].filter(Boolean).join('<br>');
 
   const html = `<!DOCTYPE html>
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Dynasty Quote — ${escHtml(fields.client)}</title>
+<title>${escHtml(bizName)} — Quote for ${escHtml(fields.client)}</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body { font-family: Arial, sans-serif; font-size: 11pt; color: #222; background: #fff; padding: 40px; }
   .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 32px; padding-bottom: 20px; border-bottom: 3px solid #C9A84C; }
-  .brand-name { font-size: 22pt; font-weight: 900; color: #111; letter-spacing: -0.5px; }
+  .brand-name { font-size: 20pt; font-weight: 900; color: #111; letter-spacing: -0.5px; }
   .brand-sub  { font-size: 9pt; color: #666; margin-top: 3px; text-transform: uppercase; letter-spacing: 1px; }
-  .gold-bar   { width: 60px; height: 5px; background: #C9A84C; margin-top: 6px; }
-  .header-right { text-align: right; font-size: 9pt; color: #555; line-height: 1.7; }
-  .header-right strong { font-size: 10pt; color: #222; }
+  .gold-bar   { width: 60px; height: 4px; background: #C9A84C; margin-top: 6px; }
+  .header-right { text-align: right; font-size: 9pt; color: #555; line-height: 1.8; }
+  .header-right strong { font-size: 10pt; color: #222; display: block; margin-bottom: 4px; }
   h2 { font-size: 13pt; color: #111; margin: 20px 0 8px; border-left: 4px solid #C9A84C; padding-left: 10px; }
   p  { line-height: 1.6; margin-bottom: 8px; }
   .meta-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 16px 0; }
@@ -382,16 +401,15 @@ function generateQuotePDF(quoteText, fields, calc) {
 
 <div class="header">
   <div>
-    <div class="brand-name">DYNASTY</div>
-    <div class="brand-sub">Bricklaying &amp; Pressure Cleaning</div>
+    ${logoHtml}
+    <div class="brand-name">${escHtml(bizName)}</div>
     <div class="gold-bar"></div>
   </div>
   <div class="header-right">
-    <strong>FORMAL QUOTE</strong><br>
+    <strong>FORMAL QUOTE</strong>
     Date: ${today}<br>
     Valid Until: ${validUntil}<br>
-    ABN: [Your ABN]<br>
-    Phone: [Your Phone]
+    ${contactLines}
   </div>
 </div>
 
@@ -406,7 +424,7 @@ function generateQuotePDF(quoteText, fields, calc) {
     <div class="meta-val">${escHtml(fields.jobType)}</div>
     <div style="font-size:9.5pt;color:#555;margin-top:4px">
       Est. Start: ${fields.startDate || 'TBC'}<br>
-      ${fields.brickType}
+      ${escHtml(fields.brickType)}
     </div>
   </div>
 </div>
@@ -426,7 +444,7 @@ function generateQuotePDF(quoteText, fields, calc) {
   <h3>Payment Terms</h3>
   <p>&#9679; Deposit (30%) due on acceptance: <span class="amt">${fmtCurrency(calc.deposit)}</span></p>
   <p>&#9679; Balance (70%) due on completion: <span class="amt">${fmtCurrency(calc.total - calc.deposit)}</span></p>
-  <p style="margin-top:8px">Payment by bank transfer. Quote valid for 30 days.</p>
+  <p style="margin-top:8px;color:#ccc">${escHtml(bizTerms)}</p>
 </div>
 
 <h2>Full Quote</h2>
@@ -439,13 +457,13 @@ function generateQuotePDF(quoteText, fields, calc) {
     <div style="font-size:8pt;color:#aaa;margin-top:6px">Signature &amp; Date</div>
   </div>
   <div class="sig-box">
-    <div class="sig-label">Dynasty Representative</div>
+    <div class="sig-label">${escHtml(bizName)}</div>
     <div class="sig-line"></div>
     <div style="font-size:8pt;color:#aaa;margin-top:6px">Signature &amp; Date</div>
   </div>
 </div>
 
-<div class="footer">Dynasty Bricklaying &amp; Pressure Cleaning &nbsp;|&nbsp; Thank you for your business</div>
+<div class="footer">${escHtml(bizName)} &nbsp;|&nbsp; Thank you for your business</div>
 
 </body>
 </html>`;

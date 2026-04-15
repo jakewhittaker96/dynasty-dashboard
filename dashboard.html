@@ -621,6 +621,45 @@
           <span class="settings-info-text">Share with builders: PIN <strong>7777</strong></span>
           <button class="settings-save-btn settings-save-btn--secondary" id="btnShareBuilder">&#128203; Copy Share Link</button>
         </div>
+
+        <div class="settings-divider"></div>
+        <div class="settings-section-title">&#127970; Business Profile</div>
+        <p class="settings-hint">Pre-fills your branding in AI-generated quote PDFs.</p>
+        <div>
+          <label class="settings-label" for="bp_name">Business Name</label>
+          <input id="bp_name" class="settings-input" placeholder="e.g. Dynasty Bricklaying" />
+        </div>
+        <div>
+          <label class="settings-label" for="bp_abn">ABN</label>
+          <input id="bp_abn" class="settings-input" placeholder="e.g. 12 345 678 901" />
+        </div>
+        <div>
+          <label class="settings-label" for="bp_phone">Phone</label>
+          <input id="bp_phone" class="settings-input" placeholder="e.g. 0412 345 678" />
+        </div>
+        <div>
+          <label class="settings-label" for="bp_email">Email</label>
+          <input id="bp_email" class="settings-input" type="email" placeholder="e.g. info@dynastyos.com.au" />
+        </div>
+        <div>
+          <label class="settings-label" for="bp_address">Business Address</label>
+          <input id="bp_address" class="settings-input" placeholder="e.g. Goulburn NSW 2580" />
+        </div>
+        <div>
+          <label class="settings-label" for="bp_terms">Default Payment Terms</label>
+          <textarea id="bp_terms" class="settings-input" rows="2" placeholder="e.g. 30% deposit on acceptance, 70% on completion. Payment by bank transfer within 7 days."></textarea>
+        </div>
+        <div>
+          <label class="settings-label" for="bp_logo">Logo (PNG/JPG — appears in PDF header)</label>
+          <input id="bp_logo_file" type="file" accept="image/png,image/jpeg,image/gif,image/webp" style="display:none" />
+          <div class="bp-logo-row">
+            <button class="settings-save-btn settings-save-btn--secondary" id="btnUploadLogo" type="button">&#128247; Upload Logo</button>
+            <span id="bp_logo_status" class="settings-hint" style="margin:0"></span>
+          </div>
+          <canvas id="bp_logo_preview" style="display:none;max-width:120px;max-height:48px;margin-top:0.5rem;border-radius:4px"></canvas>
+        </div>
+        <button class="settings-save-btn" id="btnSaveProfile">&#10003; Save Profile</button>
+        <p class="settings-msg" id="profileMsg"></p>
       </div>
     </div>
   </div>

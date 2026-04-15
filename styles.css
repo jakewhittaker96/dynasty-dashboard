@@ -2178,11 +2178,13 @@ body.modal-open { overflow: hidden; }
   border: 1px solid var(--border);
   border-radius: var(--radius);
   width: 100%;
-  max-width: 400px;
+  max-width: 460px;
+  max-height: 90vh;
   box-shadow: var(--shadow);
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
-
 .settings-header {
   display: flex;
   align-items: center;
@@ -2203,6 +2205,7 @@ body.modal-open { overflow: hidden; }
   display: flex;
   flex-direction: column;
   gap: 0.85rem;
+  overflow-y: auto;
 }
 
 .settings-label {
@@ -4512,4 +4515,21 @@ textarea.calc-input { resize: vertical; font-family: inherit; }
 @media (max-width: 600px) {
   .qg-row--2 .qg-field { flex: 1 1 100%; }
   .qg-row--toggles { flex-direction: column; }
+}
+
+/* ─── Business Profile settings section ────────────────────────────────────── */
+.settings-hint {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+.settings-body textarea.settings-input {
+  resize: vertical;
+  min-height: 56px;
+}
+.bp-logo-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 0.25rem;
 }
