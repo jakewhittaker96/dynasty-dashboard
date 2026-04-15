@@ -16,8 +16,36 @@ const PORTAL_PIN          = localStorage.getItem(PORTAL_PIN_KEY) || '9999';
 function isPortal()  { return sessionStorage.getItem('dynasty-mode') === 'portal'; }
 function isBuilder() { return sessionStorage.getItem('dynasty-mode') === 'builder'; }
 function isFullMode(){ return sessionStorage.getItem('dynasty-mode') === 'full'; }
+function isClient()  { return sessionStorage.getItem('dynasty-mode') === 'client'; }
 
-// ─── PIN Authentication ───────────────────────────────────────────────────────
+// ─── Client config helpers ────────────────────────────────────────────────────
+function applyClientConfig(client) {
+  if (!client) return;
+  if (client.servicem8ApiKey) SM8_API_KEY = client.servicem8ApiKey;
+  if (client.googleSheetUrl)  SHEET_CSV_URL = client.googleSheetUrl;
+}
+
+function applyClientUI(client) {
+  if (!client) return;
+  // Plan badge
+  const badge = document.getElementById('clientPlanBadge');
+  if (badge) {
+    badge.textContent = client.plan || 'Starter';
+    badge.className   = `client-plan-badge client-plan-badge--${(client.plan || 'starter').toLowerCase()}`;
+    badge.hidden      = false;
+  }
+  // Business name display
+  const nameEl = document.getElementById('clientNameDisplay');
+  if (nameEl) {
+    nameEl.textContent = client.businessName || '';
+    nameEl.hidden      = false;
+  }
+  // Hide owner-only controls
+  const settingsBtn = document.getElementById('btnSettings');
+  if (settingsBtn) settingsBtn.hidden = true;
+}
+
+// ─── Authentication (PIN + Client email/password) ─────────────────────────────
 (function initAuth() {
   const AUTH_KEY    = 'dynasty-auth';
   const loginScreen = document.getElementById('loginScreen');
@@ -26,9 +54,37 @@ function isFullMode(){ return sessionStorage.getItem('dynasty-mode') === 'full';
   const loginBtn    = document.getElementById('loginBtn');
   const loginError  = document.getElementById('loginError');
 
-  function unlock(mode) {
+  // Client login elements
+  const clientEmailInput    = document.getElementById('clientEmailInput');
+  const clientPasswordInput = document.getElementById('clientPasswordInput');
+  const clientLoginBtn      = document.getElementById('clientLoginBtn');
+  const clientLoginError    = document.getElementById('clientLoginError');
+
+  // Mode toggle
+  const btnLoginOwner   = document.getElementById('btnLoginOwner');
+  const btnLoginClient  = document.getElementById('btnLoginClient');
+  const ownerLoginForm  = document.getElementById('ownerLoginForm');
+  const clientLoginForm = document.getElementById('clientLoginForm');
+
+  function setLoginMode(mode) {
+    const isClient = mode === 'client';
+    if (ownerLoginForm)  ownerLoginForm.style.display  = isClient ? 'none' : '';
+    if (clientLoginForm) clientLoginForm.style.display = isClient ? '' : 'none';
+    btnLoginOwner?.classList.toggle('login-mode-btn--active',  !isClient);
+    btnLoginClient?.classList.toggle('login-mode-btn--active',  isClient);
+  }
+  window.setLoginMode = setLoginMode;
+
+  btnLoginOwner?.addEventListener('click',  () => setLoginMode('owner'));
+  btnLoginClient?.addEventListener('click', () => setLoginMode('client'));
+
+  function unlock(mode, clientData) {
     sessionStorage.setItem(AUTH_KEY, '1');
     sessionStorage.setItem('dynasty-mode', mode);
+    if (mode === 'client' && clientData) {
+      sessionStorage.setItem('dynasty-client-uuid', clientData.uuid);
+      applyClientConfig(clientData);
+    }
     loginScreen.style.display = 'none';
     dashboard.hidden = false;
     if (mode === 'portal') {
@@ -39,23 +95,41 @@ function isFullMode(){ return sessionStorage.getItem('dynasty-mode') === 'full';
       const wm = document.getElementById('builderWatermark');
       if (wm) wm.hidden = false;
     }
+    if (mode === 'client' && clientData) {
+      applyClientUI(clientData);
+    }
   }
 
-  // Already authenticated this session
+  // ── Already authenticated this session ─────────────────────────────────────
   if (sessionStorage.getItem(AUTH_KEY) === '1') {
     loginScreen.style.display = 'none';
     dashboard.hidden = false;
-    if (isPortal()) {
+    const mode = sessionStorage.getItem('dynasty-mode');
+    if (mode === 'portal') {
       const wm = document.getElementById('portalWatermark');
       if (wm) wm.hidden = false;
     }
-    if (isBuilder()) {
+    if (mode === 'builder') {
       const wm = document.getElementById('builderWatermark');
       if (wm) wm.hidden = false;
+    }
+    if (mode === 'client') {
+      const uuid = sessionStorage.getItem('dynasty-client-uuid');
+      if (uuid) {
+        try {
+          const clients = JSON.parse(localStorage.getItem('dynastyClients') || '[]');
+          const client  = clients.find(c => c.uuid === uuid);
+          if (client && client.active) {
+            applyClientConfig(client);
+            applyClientUI(client);
+          }
+        } catch (_) { /* ignore */ }
+      }
     }
     return;
   }
 
+  // ── PIN login attempt ───────────────────────────────────────────────────────
   function attempt() {
     const pin = pinInput.value;
     if (pin === currentFullPin) {
@@ -74,17 +148,66 @@ function isFullMode(){ return sessionStorage.getItem('dynasty-mode') === 'full';
     }
   }
 
+  // ── Client email/password login attempt ─────────────────────────────────────
+  function attemptClientLogin() {
+    const email    = clientEmailInput?.value.trim()  || '';
+    const password = clientPasswordInput?.value       || '';
+
+    if (!email || !password) {
+      if (clientLoginError) {
+        clientLoginError.textContent = 'Please enter your email and password.';
+        clientLoginError.hidden = false;
+      }
+      return;
+    }
+
+    // findClientByEmail and checkClientPassword are defined in clients.js
+    // clients.js loads after app.js, so we access them via window at call time
+    const client = typeof window.findClientByEmail === 'function'
+      ? window.findClientByEmail(email)
+      : null;
+
+    if (!client || !client.active) {
+      if (clientLoginError) {
+        clientLoginError.textContent = 'Account not found or inactive. Contact your Dynasty OS admin.';
+        clientLoginError.hidden = false;
+      }
+      if (clientPasswordInput) clientPasswordInput.value = '';
+      return;
+    }
+
+    const valid = typeof window.checkClientPassword === 'function'
+      ? window.checkClientPassword(password, client.passwordHash)
+      : false;
+
+    if (!valid) {
+      if (clientLoginError) {
+        clientLoginError.textContent = 'Incorrect email or password.';
+        clientLoginError.hidden = false;
+      }
+      if (clientPasswordInput) clientPasswordInput.value = '';
+      return;
+    }
+
+    if (clientLoginError) clientLoginError.hidden = true;
+    unlock('client', client);
+  }
+
   loginBtn.addEventListener('click', attempt);
   pinInput.addEventListener('keydown', e => { if (e.key === 'Enter') attempt(); });
+
+  clientLoginBtn?.addEventListener('click', attemptClientLogin);
+  clientEmailInput?.addEventListener('keydown',    e => { if (e.key === 'Enter') clientPasswordInput?.focus(); });
+  clientPasswordInput?.addEventListener('keydown', e => { if (e.key === 'Enter') attemptClientLogin(); });
 })();
 
 // ─── Sheet URL ────────────────────────────────────────────────────────────────
-const SHEET_CSV_URL =
+let SHEET_CSV_URL =
   'https://docs.google.com/spreadsheets/d/e/2PACX-1vTvsSIicwnMasEr8OQIilHtmjC0PAAgGh4WHxB3yJMNPv8feICE5MM97xFz6G0OTkpjWs7EZheqtB8G/pub?output=csv';
 
 // ServiceM8 API
 const SM8_URL     = 'https://api.servicem8.com/api_1.0/job.json';
-const SM8_API_KEY = 'smk-aa87cc-9a9a0a802a22e535-394394c0f2a1d836';
+let   SM8_API_KEY = 'smk-aa87cc-9a9a0a802a22e535-394394c0f2a1d836';
 
 // Ordered list of CORS proxies tried in sequence until one returns valid CSV
 const CORS_PROXIES = [
@@ -1877,6 +2000,9 @@ setInterval(loadSheet, 5 * 60 * 1000);
     confirmInp.value = '';
     msgEl.textContent = '';
     msgEl.className   = 'settings-msg';
+    // Show clients section only for full-owner mode
+    const clientsSection = document.getElementById('settingsClientsSection');
+    if (clientsSection) clientsSection.hidden = !isFullMode();
     overlay.classList.add('is-open');
     setTimeout(() => currentInp.focus(), 50);
   }

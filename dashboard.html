@@ -50,12 +50,33 @@
         </svg>
       </div>
       <p class="login-subtitle">Operations Dashboard</p>
-      <div class="login-form">
+
+      <!-- Mode toggle -->
+      <div class="login-mode-toggle">
+        <button class="login-mode-btn login-mode-btn--active" id="btnLoginOwner">Owner Login</button>
+        <button class="login-mode-btn" id="btnLoginClient">Client Portal</button>
+      </div>
+
+      <!-- Owner PIN form -->
+      <div id="ownerLoginForm" class="login-form">
         <label class="login-label" for="pinInput">Enter PIN</label>
         <input id="pinInput" class="login-pin" type="password" inputmode="numeric"
                maxlength="4" placeholder="••••" autocomplete="off" />
         <button id="loginBtn" class="login-btn">Login</button>
         <p id="loginError" class="login-error" hidden>Incorrect PIN. Try again.</p>
+      </div>
+
+      <!-- Client login form -->
+      <div id="clientLoginForm" class="login-form" style="display:none">
+        <label class="login-label" for="clientEmailInput">Email Address</label>
+        <input id="clientEmailInput" class="login-pin" type="email"
+               placeholder="you@example.com" autocomplete="email"
+               style="font-size:0.9rem;letter-spacing:0" />
+        <label class="login-label" for="clientPasswordInput" style="margin-top:0.75rem">Password</label>
+        <input id="clientPasswordInput" class="login-pin" type="password"
+               placeholder="••••••••" autocomplete="current-password" />
+        <button id="clientLoginBtn" class="login-btn">Client Portal &rarr;</button>
+        <p id="clientLoginError" class="login-error" hidden>Incorrect email or password.</p>
       </div>
     </div>
   </div>
@@ -112,6 +133,8 @@
           <button class="biz-toggle-btn" data-biz="pressure">Pressure Cleaning</button>
         </div>
         <span class="last-updated" id="lastUpdated">Last updated: —</span>
+        <span class="client-plan-badge" id="clientPlanBadge" hidden></span>
+        <span class="client-name-display" id="clientNameDisplay" hidden></span>
         <button class="btn-header-action" id="btnWeeklySummary" title="AI Weekly Summary">&#128200; Summary</button>
         <button class="btn-header-action" id="btnCalculate" title="Materials Calculator">&#129523; Calculate</button>
         <button class="btn-header-action" id="btnReadPlan" title="AI Plan Reader">&#128196; Read Plan</button>
@@ -659,6 +682,14 @@
         </div>
         <button class="settings-save-btn" id="btnSaveProfile">&#10003; Save Profile</button>
         <p class="settings-msg" id="profileMsg"></p>
+
+        <!-- Clients section — visible to owner only -->
+        <div id="settingsClientsSection" hidden>
+          <div class="settings-divider"></div>
+          <div class="settings-section-title">&#128101; Client Manager</div>
+          <p class="settings-hint">Add and manage client accounts, API keys, and access.</p>
+          <button class="settings-save-btn settings-save-btn--secondary" id="btnManageClients">&#128101; View All Clients</button>
+        </div>
       </div>
     </div>
   </div>
@@ -969,6 +1000,130 @@
     </div>
   </div>
 
+  <!-- ======================================================
+       CLIENTS MANAGER MODAL
+       ====================================================== -->
+  <div id="clientsOverlay" class="ai-modal-overlay" role="dialog" aria-modal="true">
+    <div class="ai-modal ai-modal--wide">
+      <div class="ai-modal-header">
+        <span class="ai-modal-title">&#128101; Client Manager</span>
+        <div class="ai-modal-actions">
+          <button class="calc-run-btn" id="btnAddClient" style="font-size:0.82rem;padding:0.45rem 1rem">&#43; Add Client</button>
+          <button class="btn-modal-close" id="clientsClose">&#10005;</button>
+        </div>
+      </div>
+      <div class="ai-modal-body">
+        <div class="clients-table-wrap">
+          <table class="clients-table">
+            <thead>
+              <tr>
+                <th>Business</th>
+                <th>Email</th>
+                <th>Plan</th>
+                <th>Status</th>
+                <th>Joined</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="clientsTableBody">
+              <tr><td colspan="6" style="text-align:center;color:var(--text-muted);padding:2rem">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======================================================
+       ADD / EDIT CLIENT MODAL
+       ====================================================== -->
+  <div id="clientFormOverlay" class="ai-modal-overlay" role="dialog" aria-modal="true">
+    <div class="ai-modal ai-modal--wide">
+      <div class="ai-modal-header">
+        <span class="ai-modal-title" id="clientFormTitle">Add Client</span>
+        <button class="btn-modal-close" id="clientFormClose">&#10005;</button>
+      </div>
+      <div class="ai-modal-body">
+        <div class="subbie-form">
+          <div class="subbie-form-row">
+            <label class="calc-label">Business Name <span style="color:#e05252">*</span></label>
+            <input id="cf_businessName" class="calc-input" placeholder="e.g. Smith Bricklaying" />
+          </div>
+          <div class="subbie-form-row">
+            <label class="calc-label">Owner Name</label>
+            <input id="cf_ownerName" class="calc-input" placeholder="e.g. John Smith" />
+          </div>
+          <div class="subbie-form-row">
+            <label class="calc-label">Email Address <span style="color:#e05252">*</span></label>
+            <input id="cf_email" class="calc-input" type="email" placeholder="john@smithbricklaying.com.au" />
+          </div>
+          <div class="subbie-form-row">
+            <label class="calc-label">
+              Password
+              <span id="cf_password_hint" style="color:var(--text-muted);font-size:0.75rem;font-weight:400"> — leave blank to keep current</span>
+            </label>
+            <input id="cf_password" class="calc-input" type="password" placeholder="Minimum 6 characters" autocomplete="new-password" />
+          </div>
+          <div class="subbie-form-row">
+            <label class="calc-label">Phone</label>
+            <input id="cf_phone" class="calc-input" placeholder="0412 345 678" />
+          </div>
+          <div class="subbie-form-row">
+            <label class="calc-label">ABN</label>
+            <input id="cf_abn" class="calc-input" placeholder="12 345 678 901" />
+          </div>
+          <div class="subbie-form-row">
+            <label class="calc-label">Plan</label>
+            <select id="cf_plan" class="calc-input">
+              <option value="Starter">Starter — $97/mo</option>
+              <option value="Growth">Growth — $297/mo</option>
+              <option value="DFY">Done For You — $497/mo</option>
+            </select>
+          </div>
+          <div class="subbie-form-row">
+            <label class="calc-label">ServiceM8 API Key</label>
+            <input id="cf_servicem8ApiKey" class="calc-input" placeholder="smk-xxxx-xxxx-xxxx" />
+          </div>
+          <div class="subbie-form-row">
+            <label class="calc-label">Google Sheet Published CSV URL</label>
+            <input id="cf_googleSheetUrl" class="calc-input" placeholder="https://docs.google.com/spreadsheets/d/e/…/pub?output=csv" />
+          </div>
+          <div class="subbie-form-row">
+            <label class="calc-label">MYOB API Key <span style="color:var(--text-muted);font-size:0.75rem;font-weight:400">(future)</span></label>
+            <input id="cf_myobApiKey" class="calc-input" placeholder="Optional" />
+          </div>
+          <div class="subbie-form-row">
+            <label class="calc-label">Xero API Key <span style="color:var(--text-muted);font-size:0.75rem;font-weight:400">(future)</span></label>
+            <input id="cf_xeroApiKey" class="calc-input" placeholder="Optional" />
+          </div>
+        </div>
+        <button class="calc-run-btn" id="btnSaveClient" style="margin-top:1.25rem">&#10003; Save Client</button>
+        <p class="settings-msg" id="clientFormMsg" style="margin-top:0.5rem"></p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======================================================
+       CLIENT ONBOARDING MESSAGE MODAL
+       ====================================================== -->
+  <div id="onboardingOverlay" class="ai-modal-overlay" role="dialog" aria-modal="true">
+    <div class="ai-modal">
+      <div class="ai-modal-header">
+        <span class="ai-modal-title">&#127881; Client Onboarding Message</span>
+        <div class="ai-modal-actions">
+          <button class="btn-ai-copy" id="btnCopyOnboarding">&#128203; Copy</button>
+          <button class="btn-modal-close" id="onboardingClose">&#10005;</button>
+        </div>
+      </div>
+      <div class="ai-modal-body">
+        <p style="font-size:0.82rem;color:var(--text-muted);margin-bottom:0.75rem">
+          Share this with your new client via email or message:
+        </p>
+        <pre id="onboardingText" class="onboarding-pre"></pre>
+      </div>
+    </div>
+  </div>
+
   <script src="app.js"></script>
   <script src="servicem8.js"></script>
   <script src="builder.js"></script>
@@ -977,5 +1132,6 @@
   <script src="safety.js"></script>
   <script src="schedule.js"></script>
   <script src="quotegen.js"></script>
+  <script src="clients.js"></script>
 </body>
 </html>

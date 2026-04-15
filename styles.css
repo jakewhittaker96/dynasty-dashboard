@@ -4533,3 +4533,173 @@ textarea.calc-input { resize: vertical; font-family: inherit; }
   gap: 0.75rem;
   margin-top: 0.25rem;
 }
+
+/* ══════════════════════════════════════════════════════════════════
+   MULTI-CLIENT LOGIN SYSTEM
+   ══════════════════════════════════════════════════════════════════ */
+
+/* ─── Login mode toggle ─────────────────────────────────────────── */
+.login-mode-toggle {
+  display: flex;
+  background: rgba(255,255,255,0.05);
+  border-radius: 8px;
+  padding: 3px;
+  margin-bottom: 1.25rem;
+  border: 1px solid rgba(201,168,76,0.15);
+}
+.login-mode-btn {
+  flex: 1;
+  padding: 0.45rem 0.75rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted, #8a8070);
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.15s;
+  letter-spacing: 0.02em;
+}
+.login-mode-btn--active {
+  background: rgba(201,168,76,0.18);
+  color: var(--gold, #c9a84c);
+}
+.login-mode-btn:hover:not(.login-mode-btn--active) {
+  color: #f0ead8;
+}
+
+/* ─── Client plan badge (in header) ─────────────────────────────── */
+.client-plan-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  padding: 0.22rem 0.6rem;
+  border-radius: 4px;
+  white-space: nowrap;
+  background: rgba(201,168,76,0.15);
+  color: var(--gold, #c9a84c);
+  border: 1px solid rgba(201,168,76,0.3);
+}
+.client-plan-badge--starter {
+  background: rgba(255,255,255,0.07);
+  color: #aaa;
+  border-color: rgba(255,255,255,0.12);
+}
+.client-plan-badge--growth {
+  background: rgba(201,168,76,0.15);
+  color: var(--gold, #c9a84c);
+  border-color: rgba(201,168,76,0.3);
+}
+.client-plan-badge--dfy {
+  background: rgba(82,196,138,0.12);
+  color: #52c48a;
+  border-color: rgba(82,196,138,0.25);
+}
+
+/* ─── Client name in header ──────────────────────────────────────── */
+.client-name-display {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #f0ead8;
+  white-space: nowrap;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ─── Client manager table ───────────────────────────────────────── */
+.clients-table-wrap {
+  overflow-x: auto;
+}
+.clients-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+}
+.clients-table th {
+  text-align: left;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-muted, #8a8070);
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid rgba(201,168,76,0.15);
+  white-space: nowrap;
+}
+.clients-table td {
+  padding: 0.7rem 0.75rem;
+  color: #f0ead8;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+  vertical-align: middle;
+}
+.clients-table tr:last-child td { border-bottom: none; }
+.client-row--inactive td { opacity: 0.45; }
+
+/* ─── Plan badge (in table) ──────────────────────────────────────── */
+.plan-badge {
+  display: inline-block;
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 0.2rem 0.5rem;
+  border-radius: 3px;
+}
+.plan-badge--starter { background: rgba(255,255,255,0.07); color: #aaa; }
+.plan-badge--growth  { background: rgba(201,168,76,0.15);  color: var(--gold, #c9a84c); }
+.plan-badge--dfy     { background: rgba(82,196,138,0.12);  color: #52c48a; }
+
+/* ─── Status dot ─────────────────────────────────────────────────── */
+.status-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  vertical-align: middle;
+  margin-right: 0.35rem;
+  margin-bottom: 1px;
+}
+.status-dot--green { background: #52c48a; }
+.status-dot--red   { background: #e05252; }
+
+/* ─── Table action buttons ───────────────────────────────────────── */
+.client-row-actions { white-space: nowrap; }
+.client-action-btn {
+  font-size: 0.73rem;
+  font-weight: 600;
+  padding: 0.25rem 0.6rem;
+  border-radius: 4px;
+  border: 1px solid rgba(201,168,76,0.3);
+  background: rgba(201,168,76,0.08);
+  color: var(--gold, #c9a84c);
+  cursor: pointer;
+  font-family: inherit;
+  margin-right: 0.3rem;
+  transition: background 0.15s;
+}
+.client-action-btn:hover { background: rgba(201,168,76,0.2); }
+.client-action-btn--danger {
+  border-color: rgba(224,82,82,0.3);
+  background: rgba(224,82,82,0.08);
+  color: #e05252;
+}
+.client-action-btn--danger:hover { background: rgba(224,82,82,0.2); }
+
+/* ─── Onboarding message pre block ──────────────────────────────── */
+.onboarding-pre {
+  white-space: pre-wrap;
+  font-family: inherit;
+  font-size: 0.82rem;
+  line-height: 1.65;
+  color: #f0ead8;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(201,168,76,0.2);
+  padding: 1rem;
+  border-radius: 6px;
+  margin: 0;
+}
