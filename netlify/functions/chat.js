@@ -27,11 +27,12 @@ exports.handler = async (event) => {
     return { statusCode: 400, body: JSON.stringify({ error: 'Invalid JSON body' }) };
   }
 
-  const { messages, context, role = 'chat' } = body;
+  const { messages, context, role = 'chat', base64Pdf, pdfName } = body;
 
   console.log('[chat] role            :', role);
   console.log('[chat] messages count  :', Array.isArray(messages) ? messages.length : 'not array');
   console.log('[chat] context length  :', typeof context === 'string' ? context.length : '(none)');
+  console.log('[chat] base64Pdf       :', base64Pdf ? `present (${Math.round(base64Pdf.length / 1024)} KB b64)` : 'none');
   if (context) {
     console.log('[chat] context snippet :', context.slice(0, 120).replace(/\n/g, ' '));
   }
@@ -58,7 +59,7 @@ exports.handler = async (event) => {
     maxTokens = 2048;
     systemPrompt =
       `You are a quantity surveyor and estimator for Dynasty Bricklaying, an Australian bricklaying ` +
-      `business. You will be given extracted text from a building plan or architectural drawing.\n\n` +
+      `business. You are reading the actual PDF of a building plan or architectural drawing.\n\n` +
       `Your job is to analyse the plan and produce a detailed bricklaying estimate. Follow these rules:\n` +
       `- Identify all brick/block walls and calculate their area in m²\n` +
       `- Assume standard brick size 230×76mm laid in stretcher bond unless stated otherwise\n` +
@@ -81,7 +82,7 @@ exports.handler = async (event) => {
       `QUOTE PRICE: $XX,XXX\n\n` +
       `NOTES\n` +
       `[Any assumptions, exclusions, or flags about the plan]\n\n` +
-      `If the extracted text does not appear to be a building plan, say so clearly and ask for a clearer PDF.`;
+      `If the document is not a building plan, say so clearly.`;
   } else {
     systemPrompt =
       `You are Dynasty AI, a business assistant for Dynasty Bricklaying, an Australian bricklaying ` +
@@ -92,21 +93,58 @@ exports.handler = async (event) => {
 
   console.log('[chat] system prompt length:', systemPrompt.length);
 
+  // ── Build messages array — PDF document block for plan role ──────────────────
+  // When a base64 PDF is provided, replace the plain-text message with a
+  // multi-part content array containing a document block + the user's text prompt.
+  let apiMessages = messages;
+  if (role === 'plan' && base64Pdf) {
+    const userText = (messages[0] && typeof messages[0].content === 'string')
+      ? messages[0].content
+      : 'Analyse this building plan and provide a complete bricklaying materials and quote estimate.';
+
+    apiMessages = [{
+      role: 'user',
+      content: [
+        {
+          type:   'document',
+          source: {
+            type:       'base64',
+            media_type: 'application/pdf',
+            data:       base64Pdf,
+          },
+          ...(pdfName ? { title: pdfName } : {}),
+        },
+        {
+          type: 'text',
+          text: userText,
+        },
+      ],
+    }];
+
+    console.log('[chat] using document block for PDF analysis');
+  }
+
   // ── Call Anthropic ────────────────────────────────────────────────────────────
+  const reqHeaders = {
+    'Content-Type':      'application/json',
+    'x-api-key':         apiKey,
+    'anthropic-version': '2023-06-01',
+  };
+  // PDF document blocks require the pdfs beta header
+  if (role === 'plan' && base64Pdf) {
+    reqHeaders['anthropic-beta'] = 'pdfs-2024-09-25';
+  }
+
   let anthropicRes;
   try {
     anthropicRes = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type':      'application/json',
-        'x-api-key':         apiKey,
-        'anthropic-version': '2023-06-01',
-      },
+      method:  'POST',
+      headers: reqHeaders,
       body: JSON.stringify({
         model:      'claude-sonnet-4-6',
         max_tokens: maxTokens,
         system:     systemPrompt,
-        messages,
+        messages:   apiMessages,
       }),
     });
   } catch (fetchErr) {

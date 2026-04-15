@@ -739,7 +739,7 @@
           <input type="file" id="planFileInput" accept=".pdf" hidden />
           <div class="plan-drop-icon">&#128196;</div>
           <div class="plan-drop-text">Drop a PDF building plan here, or <span class="plan-drop-link">click to upload</span></div>
-          <div class="plan-drop-hint">Works best with digital (CAD/Revit) PDFs — not scanned images</div>
+          <div class="plan-drop-hint">PDF is sent directly to Dynasty AI — max 4 MB</div>
         </div>
         <div id="planFileInfo" class="plan-file-info" hidden></div>
         <button class="calc-run-btn" id="btnAnalysePlan" disabled style="margin-top:1rem">&#9654; Analyse Plan</button>
@@ -749,8 +749,6 @@
     </div>
   </div>
 
-  <!-- PDF.js (text extraction for plan reader) -->
-  <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

@@ -513,7 +513,8 @@ function updateTabBadges(jobs) {
   // Jobs tab: unpaid completed jobs that haven't been chased yet
   const chaseLog        = loadChaseLog();
   const unpaidCompleted = jobs.filter(j =>
-    j.status === 'Completed' && !isPaid(j) && !chaseLog[j.uuid]
+    j.status === 'Completed' && !isPaid(j) &&
+    parseFloat(j.total_invoice_amount || 0) > 0 && !chaseLog[j.uuid]
   ).length;
 
   // Pipeline tab: overdue work orders (>30 days old)
@@ -3502,13 +3503,13 @@ function buildBusinessContext() {
 const AI_PROXY_URL = '/api/chat';
 
 // context = plain-text business data string; role = 'chat' | 'summary'
-async function callClaudeAPI(messages, context, role = 'chat') {
+async function callClaudeAPI(messages, context, role = 'chat', extras = {}) {
   let res;
   try {
     res = await fetch(AI_PROXY_URL, {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ messages, context, role }),
+      body:    JSON.stringify({ messages, context, role, ...extras }),
     });
   } catch (networkErr) {
     throw new Error('Could not reach AI endpoint — check your connection or Netlify deployment.');
@@ -3784,24 +3785,30 @@ function renderPayrollCalculator(jobs) {
 // FEATURE: AI PLAN READER
 // ═══════════════════════════════════════════════════════════════════════════════
 
-async function extractPDFText(file) {
-  const lib = window.pdfjsLib;
-  if (!lib) throw new Error('PDF reader not loaded — please refresh the page.');
+function readFileAsBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload  = () => resolve(reader.result.split(',')[1]);
+    reader.onerror = () => reject(new Error('Failed to read file'));
+    reader.readAsDataURL(file);
+  });
+}
 
-  lib.GlobalWorkerOptions.workerSrc =
-    'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
-
-  const buf  = await file.arrayBuffer();
-  const pdf  = await lib.getDocument({ data: new Uint8Array(buf) }).promise;
-  let text   = `[PDF: "${file.name}" — ${pdf.numPages} page(s)]\n\n`;
-
-  for (let p = 1; p <= Math.min(pdf.numPages, 20); p++) {
-    const page    = await pdf.getPage(p);
-    const content = await page.getTextContent();
-    const pageStr = content.items.map(i => i.str).join(' ').trim();
-    if (pageStr) text += `[Page ${p}]\n${pageStr}\n\n`;
+// Returns sorted unique crew name strings extracted from the Google Sheets data
+function getCrewNames() {
+  if (!currentBySite) return [];
+  const names = new Set();
+  for (const [, rows] of currentBySite) {
+    for (const row of rows) {
+      const raw = (row.crewName || '').trim();
+      if (!raw || /^\d+(\.\d+)?$/.test(raw)) continue;
+      raw.split(',')
+        .map(n => n.trim())
+        .filter(n => n.length > 1 && !/^\d+$/.test(n))
+        .forEach(n => names.add(n.toLowerCase().replace(/\b\w/g, c => c.toUpperCase())));
+    }
   }
-  return text.trim();
+  return [...names].sort();
 }
 
 (function initPlanReader() {
@@ -3862,25 +3869,25 @@ async function extractPDFText(file) {
   analyseBtn?.addEventListener('click', async () => {
     if (!currentFile) return;
     analyseBtn.disabled = true;
-    analyseBtn.textContent = '⏳ Reading plan…';
-    if (resultsEl) { resultsEl.hidden = false; resultsEl.innerHTML = '<div class="ai-loading">Extracting text and analysing…</div>'; }
+    analyseBtn.textContent = '⏳ Uploading plan…';
+    if (resultsEl) { resultsEl.hidden = false; resultsEl.innerHTML = '<div class="ai-loading">Sending PDF to Dynasty AI for analysis…</div>'; }
     if (copyBtn) copyBtn.hidden = true;
 
     try {
-      const pdfText = await extractPDFText(currentFile);
-
-      if (!pdfText || pdfText.replace(/\[.*?\]/g, '').trim().length < 80) {
+      // Guard: Netlify function body limit ~6 MB; base64 adds ~33% so cap source at 4 MB
+      if (currentFile.size > 4 * 1024 * 1024) {
         throw new Error(
-          'Very little text was found in this PDF — it may be a scanned image. ' +
-          'Try a digital/CAD-generated PDF for best results.'
+          `PDF is ${(currentFile.size / (1024 * 1024)).toFixed(1)} MB — max allowed is 4 MB. ` +
+          'Try reducing the PDF file size (print to PDF at lower quality) and upload again.'
         );
       }
 
-      const context = pdfText.slice(0, 9000);
-      const reply   = await callClaudeAPI(
+      const base64Pdf = await readFileAsBase64(currentFile);
+      const reply     = await callClaudeAPI(
         [{ role: 'user', content: 'Analyse this building plan and provide a complete bricklaying materials and quote estimate.' }],
-        context,
-        'plan'
+        null,
+        'plan',
+        { base64Pdf, pdfName: currentFile.name }
       );
 
       if (resultsEl) {
@@ -4031,8 +4038,21 @@ function openSafetyForm(type) {
     document.body.appendChild(overlay);
   }
 
-  const todayStr = new Date().toISOString().slice(0, 10);
-  const siteOpts = ['', ...sites].map(s => `<option value="${escHtml(s)}">${escHtml(s || '— Select site —')}</option>`).join('');
+  const todayStr  = new Date().toISOString().slice(0, 10);
+  const siteOpts  = ['', ...sites].map(s => `<option value="${escHtml(s)}">${escHtml(s || '— Select site —')}</option>`).join('');
+  const crewNames = getCrewNames();
+
+  // Attendees field: checkboxes from dashboard crew data, or free-text fallback
+  const attendeesField = crewNames.length > 0
+    ? `<div class="subbie-form-row">
+        <label class="calc-label">Attendees</label>
+        <div id="sf_att_checks" class="sf-crew-checks">
+          ${crewNames.map(n => `<label class="sf-crew-check-lbl"><input type="checkbox" class="sf-att-check" value="${escHtml(n)}" style="accent-color:var(--gold)" /> ${escHtml(n)}</label>`).join('')}
+        </div>
+        <input id="sf_att_extra" class="calc-input" style="margin-top:0.4rem" placeholder="Additional attendees (comma separated, optional)" />
+      </div>`
+    : `<div class="subbie-form-row"><label class="calc-label">Attendees (comma separated)</label>
+        <input id="sf_att" class="calc-input" placeholder="Henry, Tommy, Jhy" /></div>`;
 
   overlay.innerHTML = isTalk ? `
     <div class="ai-modal">
@@ -4048,8 +4068,7 @@ function openSafetyForm(type) {
             <select id="sf_site" class="calc-input">${siteOpts}</select></div>
           <div class="subbie-form-row"><label class="calc-label">Topic discussed *</label>
             <input id="sf_topic" class="calc-input" placeholder="e.g. Working at heights, PPE, Manual handling" /></div>
-          <div class="subbie-form-row"><label class="calc-label">Attendees (comma separated)</label>
-            <input id="sf_att" class="calc-input" placeholder="Henry, Tommy, Jhy" /></div>
+          ${attendeesField}
           <div class="subbie-form-row" style="flex-direction:row;align-items:center;gap:0.5rem">
             <input type="checkbox" id="sf_signoff" style="width:auto;accent-color:var(--gold)" />
             <label for="sf_signoff" class="calc-label" style="margin:0">I confirm this toolbox talk was conducted</label>
@@ -4094,12 +4113,16 @@ function openSafetyForm(type) {
     if (isTalk) {
       const topic = document.getElementById('sf_topic')?.value.trim();
       if (!topic) { showToast('Topic is required', 'error'); return; }
+      // Attendees: from checkboxes (if rendered) + optional extra free-text field
+      const checked = [...document.querySelectorAll('.sf-att-check:checked')].map(c => c.value);
+      const extra   = (document.getElementById('sf_att_extra')?.value || document.getElementById('sf_att')?.value || '').trim();
+      const attendeesList = [...checked, ...extra.split(',').map(s => s.trim()).filter(Boolean)];
       d.talks.push({
         id:        'tk_' + Date.now(),
         date:      document.getElementById('sf_date')?.value || todayStr,
         site:      document.getElementById('sf_site')?.value || '',
         topic,
-        attendees: document.getElementById('sf_att')?.value.trim() || '',
+        attendees: attendeesList.join(', '),
         signOff:   document.getElementById('sf_signoff')?.checked || false,
       });
     } else {

@@ -3657,4 +3657,21 @@ textarea.calc-input { resize: vertical; font-family: inherit; }
 }
 .safety-submit-btn:hover { background: var(--gold-light); }
 
+/* Crew checklist in toolbox talk form */
+.sf-crew-checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 1rem;
+  margin-top: 0.25rem;
+}
+.sf-crew-check-lbl {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.85rem;
+  color: var(--text);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
 
