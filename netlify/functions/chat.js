@@ -27,7 +27,7 @@ exports.handler = async (event) => {
     return { statusCode: 400, body: JSON.stringify({ error: 'Invalid JSON body' }) };
   }
 
-  const { messages, context, role = 'chat', base64Pdf, pdfName } = body;
+  const { messages, context, role = 'chat', base64Pdf, pdfName, systemPromptOverride } = body;
 
   console.log('[chat] role            :', role);
   console.log('[chat] messages count  :', Array.isArray(messages) ? messages.length : 'not array');
@@ -49,7 +49,11 @@ exports.handler = async (event) => {
   let systemPrompt;
   let maxTokens = 1024;
 
-  if (role === 'summary') {
+  // Client-supplied override (used by Quote Generator)
+  if (systemPromptOverride && typeof systemPromptOverride === 'string') {
+    systemPrompt = systemPromptOverride;
+    maxTokens    = 2048;
+  } else if (role === 'summary') {
     systemPrompt =
       `You are Dynasty AI, a business analyst assistant for Dynasty Bricklaying, an Australian ` +
       `bricklaying and pressure cleaning business. Write professional, clear business summaries ` +

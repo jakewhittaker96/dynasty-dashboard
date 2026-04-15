@@ -115,6 +115,8 @@
         <button class="btn-header-action" id="btnWeeklySummary" title="AI Weekly Summary">&#128200; Summary</button>
         <button class="btn-header-action" id="btnCalculate" title="Materials Calculator">&#129523; Calculate</button>
         <button class="btn-header-action" id="btnReadPlan" title="AI Plan Reader">&#128196; Read Plan</button>
+        <button class="btn-header-action btn-header-action--gold" id="btnGenerateQuote" title="AI Quote Generator">&#128203; Quote</button>
+        <button class="btn-header-action btn-header-action--icon" id="btnMyRates" title="My Default Rates">&#9881;</button>
         <button class="btn-settings" id="btnSettings" title="Settings">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
         </button>
@@ -762,6 +764,173 @@
     </div>
   </div>
 
+  <!-- ======================================================
+       AI QUOTE GENERATOR MODAL
+       ====================================================== -->
+  <div id="quoteGenOverlay" class="ai-modal-overlay" role="dialog" aria-modal="true">
+    <div class="ai-modal ai-modal--wide ai-modal--quote">
+      <div class="ai-modal-header">
+        <span class="ai-modal-title">&#128203; AI Quote Generator</span>
+        <button class="btn-modal-close" id="quoteGenClose">&#10005;</button>
+      </div>
+      <div class="ai-modal-body" id="quoteGenBody">
+
+        <!-- ── Input form ── -->
+        <div id="quoteGenForm" class="qg-form">
+          <div class="qg-row qg-row--2">
+            <div class="qg-field">
+              <label class="qg-label">Client Name *</label>
+              <input id="qg_client" class="calc-input" placeholder="e.g. John Smith" />
+            </div>
+            <div class="qg-field">
+              <label class="qg-label">Job Address *</label>
+              <input id="qg_address" class="calc-input" placeholder="e.g. 12 Main St, Goulburn NSW" />
+            </div>
+          </div>
+
+          <div class="qg-row qg-row--2">
+            <div class="qg-field">
+              <label class="qg-label">Job Type *</label>
+              <select id="qg_jobtype" class="calc-input">
+                <option value="">— Select job type —</option>
+                <option value="Brick Veneer">Brick Veneer</option>
+                <option value="Double Brick">Double Brick</option>
+                <option value="Retaining Wall">Retaining Wall</option>
+                <option value="Block Work">Block Work</option>
+                <option value="Footing">Footing</option>
+                <option value="Fence">Fence</option>
+                <option value="Paving">Paving</option>
+                <option value="Pressure Clean">Pressure Clean</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+            <div class="qg-field">
+              <label class="qg-label">Brick / Block Type</label>
+              <select id="qg_bricktype" class="calc-input">
+                <option value="Standard Brick">Standard Brick (230×76mm)</option>
+                <option value="Maxi Brick">Maxi Brick (290×90mm)</option>
+                <option value="Besser Block">Besser Block (390×190mm)</option>
+                <option value="Paving Brick">Paving Brick</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Dimensions row -->
+          <div class="qg-row qg-row--dim">
+            <div class="qg-field">
+              <label class="qg-label">Dimensions</label>
+              <div class="qg-dim-toggle">
+                <button class="qg-dim-btn qg-dim-btn--active" id="qgDimLH" type="button" onclick="qgSetDimMode('lh')">Length × Height</button>
+                <button class="qg-dim-btn" id="qgDimArea" type="button" onclick="qgSetDimMode('area')">Area m²</button>
+              </div>
+            </div>
+            <div class="qg-field" id="qgDimLHFields">
+              <label class="qg-label">Length (m)</label>
+              <input id="qg_length" class="calc-input" type="number" min="0" step="0.1" placeholder="0.0" />
+            </div>
+            <div class="qg-field" id="qgDimHField">
+              <label class="qg-label">Height (m)</label>
+              <input id="qg_height" class="calc-input" type="number" min="0" step="0.1" placeholder="0.0" />
+            </div>
+            <div class="qg-field" id="qgDimAreaField" style="display:none">
+              <label class="qg-label">Area (m²)</label>
+              <input id="qg_area" class="calc-input" type="number" min="0" step="0.1" placeholder="0.0" />
+            </div>
+          </div>
+
+          <!-- Rate row -->
+          <div class="qg-row qg-row--2">
+            <div class="qg-field">
+              <label class="qg-label" id="qgRateLabel">Your Rate ($ per brick)</label>
+              <input id="qg_rate" class="calc-input" type="number" min="0" step="0.01" placeholder="e.g. 5.20" />
+            </div>
+            <div class="qg-field">
+              <label class="qg-label">Estimated Start Date</label>
+              <input id="qg_startdate" class="calc-input" type="date" />
+            </div>
+          </div>
+
+          <!-- Materials + GST toggles -->
+          <div class="qg-row qg-row--toggles">
+            <div class="qg-toggle-wrap">
+              <label class="qg-label">Materials included?</label>
+              <div class="qg-toggle-row">
+                <label class="qg-toggle">
+                  <input type="checkbox" id="qg_materials" />
+                  <span class="qg-toggle-slider"></span>
+                </label>
+                <span class="qg-toggle-lbl" id="qgMaterialsLbl">No</span>
+              </div>
+              <div id="qgMarkupRow" class="qg-markup-row" style="display:none">
+                <label class="qg-label">Materials markup %</label>
+                <input id="qg_markup" class="calc-input" type="number" min="0" max="100" value="15" placeholder="15" style="width:80px" />
+              </div>
+            </div>
+            <div class="qg-toggle-wrap">
+              <label class="qg-label">GST included (10%)?</label>
+              <div class="qg-toggle-row">
+                <label class="qg-toggle">
+                  <input type="checkbox" id="qg_gst" />
+                  <span class="qg-toggle-slider"></span>
+                </label>
+                <span class="qg-toggle-lbl" id="qgGstLbl">No</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="qg-row">
+            <div class="qg-field qg-field--full">
+              <label class="qg-label">Special Requirements</label>
+              <textarea id="qg_special" class="calc-input" rows="2" placeholder="e.g. curved wall, heritage brick, difficult access, scaffolding required…"></textarea>
+            </div>
+          </div>
+
+          <div id="qgCalcPreview" class="qg-calc-preview" style="display:none"></div>
+
+          <button class="calc-run-btn" id="btnRunQuote">&#9654; Generate Quote</button>
+        </div>
+
+        <!-- ── Generated quote result ── -->
+        <div id="quoteGenResult" style="display:none">
+          <div id="quoteGenText" class="qg-result-text"></div>
+          <div class="qg-result-actions">
+            <button class="calc-run-btn" id="btnCopyQuote">&#128203; Copy Quote</button>
+            <button class="calc-run-btn" id="btnSavePDF" style="margin-left:0.5rem">&#128196; Save as PDF</button>
+            <button class="qg-back-btn" id="btnQuoteBack">&#8592; Edit Details</button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- ======================================================
+       MY RATES PANEL
+       ====================================================== -->
+  <div id="myRatesOverlay" class="ai-modal-overlay" role="dialog" aria-modal="true">
+    <div class="ai-modal">
+      <div class="ai-modal-header">
+        <span class="ai-modal-title">&#9881; My Default Rates</span>
+        <button class="btn-modal-close" id="myRatesClose">&#10005;</button>
+      </div>
+      <div class="ai-modal-body">
+        <p style="font-size:0.82rem;color:var(--text-muted);margin-bottom:1rem">These rates pre-fill the Quote Generator. Saved to your browser.</p>
+        <div class="subbie-form" id="myRatesForm">
+          <div class="subbie-form-row"><label class="calc-label">Brick Veneer ($ per brick)</label><input class="calc-input" data-rate-key="brickVeneer" placeholder="e.g. 5.20" type="number" min="0" step="0.01" /></div>
+          <div class="subbie-form-row"><label class="calc-label">Double Brick ($ per brick)</label><input class="calc-input" data-rate-key="doubleBrick" placeholder="e.g. 5.50" type="number" min="0" step="0.01" /></div>
+          <div class="subbie-form-row"><label class="calc-label">Block Work ($ per block)</label><input class="calc-input" data-rate-key="blockWork" placeholder="e.g. 8.50" type="number" min="0" step="0.01" /></div>
+          <div class="subbie-form-row"><label class="calc-label">Retaining Wall ($ per m²)</label><input class="calc-input" data-rate-key="retainingWall" placeholder="e.g. 180" type="number" min="0" step="1" /></div>
+          <div class="subbie-form-row"><label class="calc-label">Footing ($ per lineal metre)</label><input class="calc-input" data-rate-key="footing" placeholder="e.g. 95" type="number" min="0" step="1" /></div>
+          <div class="subbie-form-row"><label class="calc-label">Fence ($ per m²)</label><input class="calc-input" data-rate-key="fence" placeholder="e.g. 150" type="number" min="0" step="1" /></div>
+          <div class="subbie-form-row"><label class="calc-label">Paving ($ per m²)</label><input class="calc-input" data-rate-key="paving" placeholder="e.g. 120" type="number" min="0" step="1" /></div>
+          <div class="subbie-form-row"><label class="calc-label">Pressure Clean ($ per m²)</label><input class="calc-input" data-rate-key="pressureClean" placeholder="e.g. 0.25" type="number" min="0" step="0.01" /></div>
+          <div class="subbie-form-row"><label class="calc-label">Other / Default ($ per m²)</label><input class="calc-input" data-rate-key="other" placeholder="e.g. 100" type="number" min="0" step="1" /></div>
+        </div>
+        <button class="calc-run-btn" id="btnSaveRates" style="margin-top:1rem">&#10003; Save Rates</button>
+      </div>
+    </div>
+  </div>
+
   <script src="app.js"></script>
   <script src="servicem8.js"></script>
   <script src="builder.js"></script>
@@ -769,5 +938,6 @@
   <script src="ai.js"></script>
   <script src="safety.js"></script>
   <script src="schedule.js"></script>
+  <script src="quotegen.js"></script>
 </body>
 </html>
