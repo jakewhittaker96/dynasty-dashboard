@@ -2585,7 +2585,7 @@ document.addEventListener('keydown', e => {
     const calcOv = document.getElementById('calcOverlay');
     if (calcOv && calcOv.classList.contains('is-open')) { calcOv.classList.remove('is-open'); return; }
     const chatPanel = document.getElementById('aiChatPanel');
-    if (chatPanel && !chatPanel.hidden) { chatPanel.hidden = true; return; }
+    if (chatPanel && chatPanel.style.display !== 'none') { chatPanel.style.display = 'none'; return; }
     const modal = document.getElementById('siteModal');
     if (modal && modal.classList.contains('is-open')) { closeSiteModal(); return; }
   }
@@ -3646,35 +3646,23 @@ async function sendChatMessage() {
 }
 
 (function initAIChat() {
-  const bubble = document.getElementById('aiChatBubble');
-  const panel  = document.getElementById('aiChatPanel');
+  // Open/close is handled by inline onclick on the bubble and close button in HTML.
+  // This IIFE only wires the send button and Enter key.
   const sendBtn = document.getElementById('aiChatSend');
   const inp     = document.getElementById('aiChatInput');
-  if (!bubble || !panel) return;
-
-  function closePanel() { panel.hidden = true; }
-
-  // Toggle open/close on bubble click
-  bubble.addEventListener('click', () => {
-    panel.hidden = !panel.hidden;
-    if (!panel.hidden) inp?.focus();
-  });
-
-  // Event delegation on document — catches close button regardless of when/how it renders
-  document.addEventListener('click', e => {
-    // Close button clicked
-    if (e.target.closest('#aiChatClose')) {
-      closePanel();
-      return;
-    }
-    // Click outside the panel (and not on the bubble) closes it
-    if (!panel.hidden && !panel.contains(e.target) && !bubble.contains(e.target)) {
-      closePanel();
-    }
-  });
 
   sendBtn?.addEventListener('click', sendChatMessage);
   inp?.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChatMessage(); } });
+
+  // Click outside the panel closes it
+  document.addEventListener('click', e => {
+    const panel  = document.getElementById('aiChatPanel');
+    const bubble = document.getElementById('aiChatBubble');
+    if (!panel || panel.style.display === 'none') return;
+    if (!panel.contains(e.target) && !bubble.contains(e.target)) {
+      panel.style.display = 'none';
+    }
+  });
 })();
 
 // ─── AI Weekly Summary ────────────────────────────────────────────────────────

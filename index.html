@@ -710,13 +710,15 @@
   <!-- ======================================================
        AI CHAT BUBBLE + PANEL  (fixed overlay, outside dashboardRoot)
        ====================================================== -->
-  <button class="ai-chat-bubble" id="aiChatBubble" title="AI Assistant">
+  <button class="ai-chat-bubble" id="aiChatBubble" title="AI Assistant"
+    onclick="var p=document.getElementById('aiChatPanel');p.style.display=p.style.display==='flex'?'none':'flex';if(p.style.display==='flex')document.getElementById('aiChatInput').focus();">
     🧱
   </button>
-  <div class="ai-chat-panel" id="aiChatPanel" hidden>
+  <div class="ai-chat-panel" id="aiChatPanel" style="display:none">
     <div class="ai-chat-header">
       <span class="ai-chat-title">Dynasty AI</span>
-      <button class="btn-modal-close" id="aiChatClose" aria-label="Close chat">&#10005;</button>
+      <button class="btn-modal-close" id="aiChatClose" aria-label="Close chat"
+        onclick="document.getElementById('aiChatPanel').style.display='none'">&#10005;</button>
     </div>
     <div class="ai-chat-messages" id="aiChatMessages">
       <div class="ai-chat-msg ai-chat-msg--ai">
