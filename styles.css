@@ -4269,3 +4269,100 @@ textarea.calc-input { resize: vertical; font-family: inherit; }
   .scal-grid { grid-template-columns: repeat(2, 1fr); }
   .scal-week-label { font-size: 0.85rem; }
 }
+
+/* ─── SCHEDULE: SM8 card styles & legend ─────────────────────────────────────── */
+.scal-loading {
+  padding: 3rem 2rem;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 1rem;
+}
+
+.scal-sm8-badge {
+  font-size: 0.75rem;
+  color: #4c8bc9;
+  border: 1px solid rgba(76,139,201,0.35);
+  background: rgba(76,139,201,0.08);
+  padding: 0.25rem 0.6rem;
+  border-radius: 99px;
+  white-space: nowrap;
+}
+
+.scal-refresh-btn {
+  background: var(--surface-2);
+  border: 1px solid var(--border-dim);
+  color: var(--text-muted);
+  padding: 0.35rem 0.65rem;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: 0.78rem;
+}
+.scal-refresh-btn:hover { color: var(--text); background: var(--surface-3); }
+
+.scal-legend {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 0.6rem;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+.scal-legend-item { display: flex; align-items: center; gap: 0.3rem; }
+.scal-legend-item--wo    { color: #4c8bc9; }
+.scal-legend-item--quote { color: #c9a84c; }
+.scal-legend-item--manual { color: var(--text-muted); }
+
+/* SM8 job cards — read-only, slightly different look */
+.scal-card--sm8 {
+  cursor: default;
+  background: rgba(76,139,201,0.06);
+}
+.scal-card--sm8:hover { background: rgba(76,139,201,0.10); }
+
+.scal-card-sm8-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.2rem;
+}
+
+.scal-sm8-card-badge {
+  font-size: 0.6rem;
+  font-weight: 700;
+  padding: 0.1rem 0.35rem;
+  border-radius: 3px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.scal-sm8-card-badge--wo    { background: rgba(76,139,201,0.2); color: #4c8bc9; }
+.scal-sm8-card-badge--quote { background: rgba(201,168,76,0.2); color: #c9a84c; }
+
+.scal-card-desc {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  margin-top: 0.1rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.scal-card-addr {
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  margin-top: 0.1rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.scal-card-time {
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  margin-top: 0.1rem;
+}
+
+.scal-card-amt {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--gold);
+  white-space: nowrap;
+}
