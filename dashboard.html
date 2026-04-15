@@ -1,0 +1,760 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dynasty Dashboard — Bricklaying Operations</title>
+  <link rel="stylesheet" href="styles.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+
+  <!-- ===== LOGIN SCREEN ===== -->
+  <div id="loginScreen" class="login-screen">
+    <div class="login-card">
+      <div class="login-logo">
+        <svg style="width:200px;height:auto;" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 626.82 103.8" aria-label="Dynasty OS" role="img">
+          <defs>
+            <linearGradient id="lg1" x1="74.66" y1="-3.95" x2="74.66" y2="97.97" gradientUnits="userSpaceOnUse">
+              <stop offset="0" stop-color="#e0aa3e"/><stop offset=".45" stop-color="#ba8d34"/><stop offset="1" stop-color="#e0aa3e"/>
+            </linearGradient>
+            <linearGradient id="lg2" x1="24.89" y1="-3.95" x2="24.89" y2="97.97" href="#lg1"/>
+            <linearGradient id="lg3" x1="6.3" y1="6.13" x2="85.09" y2="84.92" href="#lg1"/>
+            <linearGradient id="lg4" x1="6.35" y1="6.08" x2="85.13" y2="84.87" gradientTransform="translate(49.68 -20.73) rotate(45)" href="#lg1"/>
+            <linearGradient id="lg5" x1="6.35" y1="6.08" x2="85.13" y2="84.87" href="#lg1"/>
+          </defs>
+          <g>
+            <g>
+              <path fill="url(#lg1)" d="M99.55,49.5v.1h-18.67v-31.02h-31.11V0h.43c7.99,0,15.92,1.77,22.98,5.51.5.26.99.54,1.48.81,7.67,4.41,14.07,10.8,18.48,18.48.29.5.57,1,.84,1.51,3.78,7.12,5.56,15.13,5.56,23.19Z"/>
+              <path fill="url(#lg2)" d="M49.78,80.62v18.58h-1.34c-7.62,0-15.19-1.65-21.93-5.2-.55-.29-1.09-.58-1.62-.89-7.75-4.46-14.19-10.93-18.61-18.7-.28-.5-.56-1-.82-1.51-3.71-7.08-5.46-15.02-5.46-23.02v-.27h18.84v31.02h30.94Z"/>
+              <rect fill="url(#lg3)" x="18.84" y="18.58" width="6.05" height="6.23"/>
+              <rect fill="url(#lg4)" x="38.61" y="38.35" width="22.5" height="22.5" transform="translate(-20.47 49.79) rotate(-45)"/>
+              <rect fill="url(#lg5)" x="74.67" y="74.4" width="6.22" height="6.22"/>
+              <path fill="#fff" d="M24.89,6.33v18.47H6.42c4.42-7.67,10.81-14.06,18.47-18.47Z"/>
+              <path fill="#fff" d="M93.29,74.4c-4.42,7.78-10.87,14.26-18.62,18.71v-18.71h18.62Z"/>
+              <rect fill="#fff" x="38.61" y="38.35" width="22.5" height="22.5" transform="translate(-20.47 49.79) rotate(-45)"/>
+            </g>
+            <g>
+              <path fill="#fff" d="M129.58,14.3h25.56c19.49,0,34.11,14.52,34.11,35.3s-14.62,35.3-34.11,35.3h-25.56V14.3ZM154.63,72.07c13.42,0,20.39-9.15,20.39-22.47s-6.96-22.47-20.39-22.47h-11.44v44.95h11.44Z"/>
+              <path fill="#fff" d="M211.38,84.4l-21.48-51.21h13.62l14.32,35.9,14.22-35.9h13.72l-21.78,51.71-8.05,18.89h-13.03l8.45-19.39Z"/>
+              <path fill="#fff" d="M248.19,33.19h13.32v7.06c2.88-4.57,8.05-8.05,15.81-8.05,10.64,0,19.59,6.56,19.59,22.28v30.43h-13.32v-28.24c0-7.56-4.08-12.53-11.04-12.53s-11.04,4.97-11.04,12.53v28.24h-13.32v-51.71Z"/>
+              <path fill="#fff" d="M301.35,59.05c0-17.9,12.83-26.85,24.86-26.85,9.25,0,15.21,5.07,16.51,7.96h.3v-6.96h13.32v51.71h-13.32v-6.96h-.3c-1.29,2.88-7.26,7.96-16.51,7.96-12.03,0-24.86-8.95-24.86-26.85ZM328.9,73.96c7.46,0,14.42-5.17,14.42-14.91s-6.96-14.92-14.42-14.92-14.42,5.27-14.42,14.92,6.96,14.91,14.42,14.91Z"/>
+              <path fill="#fff" d="M360.61,71.38l10.64-2.88c.99,3.38,3.48,6.86,8.55,6.86,3.38,0,6.66-1.69,6.66-5.37,0-2.49-1.59-4.28-5.67-5.77l-6.36-2.39c-8.55-3.08-12.13-8.55-12.13-14.82,0-9.25,8.15-14.82,17.9-14.82s16.21,5.27,17.9,13.23l-10.44,2.69c-1.39-4.18-4.08-5.47-6.86-5.47-3.48,0-5.57,1.99-5.57,4.48,0,2.19,1.29,4.08,5.37,5.47l5.77,2.19c6.36,2.29,13.32,6.07,13.32,15.21,0,10.34-8.85,15.91-19.69,15.91-10.24,0-17.8-4.97-19.39-14.52Z"/>
+              <path fill="#fff" d="M454.7,84.4l-21.48-51.21h13.62l14.32,35.9,14.22-35.9h13.72l-21.78,51.71-8.05,18.89h-13.03l8.45-19.39Z"/>
+              <path fill="#fff" d="M503.67,49.6c0-21.68,16.61-36.3,36.1-36.3s36.1,14.62,36.1,36.3-16.71,36.3-36.1,36.3-36.1-14.62-36.1-36.3ZM539.77,75.16c13.13,0,24.56-10.04,24.56-25.56s-11.44-25.56-24.56-25.56-24.56,10.04-24.56,25.56,11.44,25.56,24.56,25.56Z"/>
+              <path fill="#fff" d="M578.99,68.49l9.15-4.18c1.99,6.36,7.26,11.24,15.02,11.24,6.46,0,12.03-3.38,12.03-10.44,0-6.17-4.08-8.85-11.73-11.93l-4.57-1.79c-10.04-3.98-17.2-9.45-17.2-19.49,0-11.44,9.45-18.6,21.08-18.6s19.09,7.26,22.08,14.82l-8.45,4.57c-2.88-5.97-7.16-9.25-13.23-9.25s-10.34,3.08-10.34,8.55c0,4.28,2.59,7.56,10.54,10.74l4.77,1.89c12.03,4.77,18.69,10.24,18.69,20.58,0,13.72-11.73,20.68-23.57,20.68s-21.78-7.16-24.26-17.4Z"/>
+              <path fill="#fff" d="M422.87,85.5h-1.69v-.06c.55.04,1.11.06,1.69.06Z"/>
+              <path fill="#fff" d="M422.51,72.09c-.96-.99-1.34-2.33-1.34-3.7v-24.55h10.64v-10.65h-10.64v-11.52h-13.42v11.52h-7.36v10.65h7.36v29.37c0,6.79,5.5,12.29,12.29,12.29h1.13v-.06c.55.04,1.11.06,1.69.06h9.04v-13.42h-9.4Z"/>
+            </g>
+          </g>
+        </svg>
+      </div>
+      <p class="login-subtitle">Operations Dashboard</p>
+      <div class="login-form">
+        <label class="login-label" for="pinInput">Enter PIN</label>
+        <input id="pinInput" class="login-pin" type="password" inputmode="numeric"
+               maxlength="4" placeholder="••••" autocomplete="off" />
+        <button id="loginBtn" class="login-btn">Login</button>
+        <p id="loginError" class="login-error" hidden>Incorrect PIN. Try again.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== DASHBOARD (hidden until authenticated) ===== -->
+  <div id="dashboardRoot" hidden>
+
+  <!-- ===== HEADER ===== -->
+  <header class="site-header">
+    <div class="header-inner">
+      <div class="brand">
+        <svg style="width:220px;height:auto;" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 626.82 103.8" aria-label="Dynasty OS" role="img">
+          <defs>
+            <linearGradient id="dyn-lg1" x1="74.66" y1="-3.95" x2="74.66" y2="97.97" gradientUnits="userSpaceOnUse">
+              <stop offset="0" stop-color="#e0aa3e"/>
+              <stop offset=".45" stop-color="#ba8d34"/>
+              <stop offset="1" stop-color="#e0aa3e"/>
+            </linearGradient>
+            <linearGradient id="dyn-lg2" x1="24.89" y1="-3.95" x2="24.89" y2="97.97" href="#dyn-lg1"/>
+            <linearGradient id="dyn-lg3" x1="6.3" y1="6.13" x2="85.09" y2="84.92" href="#dyn-lg1"/>
+            <linearGradient id="dyn-lg4" x1="6.35" y1="6.08" x2="85.13" y2="84.87" gradientTransform="translate(49.68 -20.73) rotate(45)" href="#dyn-lg1"/>
+            <linearGradient id="dyn-lg5" x1="6.35" y1="6.08" x2="85.13" y2="84.87" href="#dyn-lg1"/>
+          </defs>
+          <g>
+            <g>
+              <path fill="url(#dyn-lg1)" d="M99.55,49.5v.1h-18.67v-31.02h-31.11V0h.43c7.99,0,15.92,1.77,22.98,5.51.5.26.99.54,1.48.81,7.67,4.41,14.07,10.8,18.48,18.48.29.5.57,1,.84,1.51,3.78,7.12,5.56,15.13,5.56,23.19Z"/>
+              <path fill="url(#dyn-lg2)" d="M49.78,80.62v18.58h-1.34c-7.62,0-15.19-1.65-21.93-5.2-.55-.29-1.09-.58-1.62-.89-7.75-4.46-14.19-10.93-18.61-18.7-.28-.5-.56-1-.82-1.51-3.71-7.08-5.46-15.02-5.46-23.02v-.27h18.84v31.02h30.94Z"/>
+              <rect fill="url(#dyn-lg3)" x="18.84" y="18.58" width="6.05" height="6.23"/>
+              <rect fill="url(#dyn-lg4)" x="38.61" y="38.35" width="22.5" height="22.5" transform="translate(-20.47 49.79) rotate(-45)"/>
+              <rect fill="url(#dyn-lg5)" x="74.67" y="74.4" width="6.22" height="6.22"/>
+              <path fill="#fff" d="M24.89,6.33v18.47H6.42c4.42-7.67,10.81-14.06,18.47-18.47Z"/>
+              <path fill="#fff" d="M93.29,74.4c-4.42,7.78-10.87,14.26-18.62,18.71v-18.71h18.62Z"/>
+              <rect fill="#fff" x="38.61" y="38.35" width="22.5" height="22.5" transform="translate(-20.47 49.79) rotate(-45)"/>
+            </g>
+            <g>
+              <path fill="#fff" d="M129.58,14.3h25.56c19.49,0,34.11,14.52,34.11,35.3s-14.62,35.3-34.11,35.3h-25.56V14.3ZM154.63,72.07c13.42,0,20.39-9.15,20.39-22.47s-6.96-22.47-20.39-22.47h-11.44v44.95h11.44Z"/>
+              <path fill="#fff" d="M211.38,84.4l-21.48-51.21h13.62l14.32,35.9,14.22-35.9h13.72l-21.78,51.71-8.05,18.89h-13.03l8.45-19.39Z"/>
+              <path fill="#fff" d="M248.19,33.19h13.32v7.06c2.88-4.57,8.05-8.05,15.81-8.05,10.64,0,19.59,6.56,19.59,22.28v30.43h-13.32v-28.24c0-7.56-4.08-12.53-11.04-12.53s-11.04,4.97-11.04,12.53v28.24h-13.32v-51.71Z"/>
+              <path fill="#fff" d="M301.35,59.05c0-17.9,12.83-26.85,24.86-26.85,9.25,0,15.21,5.07,16.51,7.96h.3v-6.96h13.32v51.71h-13.32v-6.96h-.3c-1.29,2.88-7.26,7.96-16.51,7.96-12.03,0-24.86-8.95-24.86-26.85ZM328.9,73.96c7.46,0,14.42-5.17,14.42-14.91s-6.96-14.92-14.42-14.92-14.42,5.27-14.42,14.92,6.96,14.91,14.42,14.91Z"/>
+              <path fill="#fff" d="M360.61,71.38l10.64-2.88c.99,3.38,3.48,6.86,8.55,6.86,3.38,0,6.66-1.69,6.66-5.37,0-2.49-1.59-4.28-5.67-5.77l-6.36-2.39c-8.55-3.08-12.13-8.55-12.13-14.82,0-9.25,8.15-14.82,17.9-14.82s16.21,5.27,17.9,13.23l-10.44,2.69c-1.39-4.18-4.08-5.47-6.86-5.47-3.48,0-5.57,1.99-5.57,4.48,0,2.19,1.29,4.08,5.37,5.47l5.77,2.19c6.36,2.29,13.32,6.07,13.32,15.21,0,10.34-8.85,15.91-19.69,15.91-10.24,0-17.8-4.97-19.39-14.52Z"/>
+              <path fill="#fff" d="M454.7,84.4l-21.48-51.21h13.62l14.32,35.9,14.22-35.9h13.72l-21.78,51.71-8.05,18.89h-13.03l8.45-19.39Z"/>
+              <path fill="#fff" d="M503.67,49.6c0-21.68,16.61-36.3,36.1-36.3s36.1,14.62,36.1,36.3-16.71,36.3-36.1,36.3-36.1-14.62-36.1-36.3ZM539.77,75.16c13.13,0,24.56-10.04,24.56-25.56s-11.44-25.56-24.56-25.56-24.56,10.04-24.56,25.56,11.44,25.56,24.56,25.56Z"/>
+              <path fill="#fff" d="M578.99,68.49l9.15-4.18c1.99,6.36,7.26,11.24,15.02,11.24,6.46,0,12.03-3.38,12.03-10.44,0-6.17-4.08-8.85-11.73-11.93l-4.57-1.79c-10.04-3.98-17.2-9.45-17.2-19.49,0-11.44,9.45-18.6,21.08-18.6s19.09,7.26,22.08,14.82l-8.45,4.57c-2.88-5.97-7.16-9.25-13.23-9.25s-10.34,3.08-10.34,8.55c0,4.28,2.59,7.56,10.54,10.74l4.77,1.89c12.03,4.77,18.69,10.24,18.69,20.58,0,13.72-11.73,20.68-23.57,20.68s-21.78-7.16-24.26-17.4Z"/>
+              <path fill="#fff" d="M422.87,85.5h-1.69v-.06c.55.04,1.11.06,1.69.06Z"/>
+              <path fill="#fff" d="M422.51,72.09c-.96-.99-1.34-2.33-1.34-3.7v-24.55h10.64v-10.65h-10.64v-11.52h-13.42v11.52h-7.36v10.65h7.36v29.37c0,6.79,5.5,12.29,12.29,12.29h1.13v-.06c.55.04,1.11.06,1.69.06h9.04v-13.42h-9.4Z"/>
+            </g>
+          </g>
+        </svg>
+      </div>
+      <div class="header-right">
+        <div class="biz-toggle" id="bizToggle" role="group" aria-label="Business filter">
+          <button class="biz-toggle-btn biz-toggle-btn--active" data-biz="all">All</button>
+          <button class="biz-toggle-btn" data-biz="bricklaying">Bricklaying</button>
+          <button class="biz-toggle-btn" data-biz="pressure">Pressure Cleaning</button>
+        </div>
+        <span class="last-updated" id="lastUpdated">Last updated: —</span>
+        <button class="btn-header-action" id="btnWeeklySummary" title="AI Weekly Summary">&#128200; Summary</button>
+        <button class="btn-header-action" id="btnCalculate" title="Materials Calculator">&#129523; Calculate</button>
+        <button class="btn-header-action" id="btnReadPlan" title="AI Plan Reader">&#128196; Read Plan</button>
+        <button class="btn-settings" id="btnSettings" title="Settings">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        </button>
+        <button class="btn-refresh" id="btnRefresh" title="Refresh data">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- ===== TAB NAV ===== -->
+  <nav class="tab-nav" aria-label="Job site navigation">
+    <div class="tab-bar" id="tabBar">
+      <!-- built dynamically by app.js -->
+    </div>
+  </nav>
+
+  <!-- ===== MAIN CONTENT ===== -->
+  <main class="main">
+
+    <!-- ======================================================
+         ALL JOBS VIEW
+         ====================================================== -->
+    <div id="viewAll">
+
+      <!-- Overview KPIs -->
+      <section class="kpi-grid">
+
+        <div class="kpi-card">
+          <div class="kpi-icon kpi-icon--bricks">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><rect x="1" y="7" width="10" height="5" rx="1"/><rect x="13" y="7" width="10" height="5" rx="1"/><rect x="4" y="13" width="10" height="5" rx="1"/><rect x="16" y="13" width="7" height="5" rx="1"/><rect x="1" y="13" width="1" height="5" rx="0.5"/></svg>
+          </div>
+          <div class="kpi-body">
+            <div class="kpi-value" id="ovTotalBricks">—</div>
+            <div class="kpi-label">Total Bricks Today</div>
+          </div>
+        </div>
+
+        <div class="kpi-card">
+          <div class="kpi-icon kpi-icon--crew">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="7" r="3"/><circle cx="17" cy="8" r="2.5"/><path d="M1 20c0-4 3.6-7 8-7s8 3 8 7"/><path d="M17 14c2.7 0 5 2 5 5"/></svg>
+          </div>
+          <div class="kpi-body">
+            <div class="kpi-value" id="ovTotalCrew">—</div>
+            <div class="kpi-label">Total Crew on Site</div>
+          </div>
+        </div>
+
+        <div class="kpi-card">
+          <div class="kpi-icon kpi-icon--sites">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+          </div>
+          <div class="kpi-body">
+            <div class="kpi-value" id="ovActiveSites">—</div>
+            <div class="kpi-label">Active Job Sites</div>
+          </div>
+        </div>
+
+        <div class="kpi-card kpi-card--problems" id="ovProblemsCard">
+          <div class="kpi-icon kpi-icon--problems">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13" stroke="#0a0a0a" stroke-width="2"/><line x1="12" y1="17" x2="12.01" y2="17" stroke="#0a0a0a" stroke-width="2"/></svg>
+          </div>
+          <div class="kpi-body">
+            <div class="kpi-value" id="ovTotalProblems">—</div>
+            <div class="kpi-label">Problems Flagged</div>
+          </div>
+        </div>
+
+      </section>
+
+      <!-- Site summary cards -->
+      <div class="site-cards-grid" id="siteCardsGrid">
+        <!-- built dynamically -->
+      </div>
+
+      <!-- Job completion countdown (per site) -->
+      <section id="completionCountdown"></section>
+
+      <!-- Weekly bricks trend chart -->
+      <section class="weekly-trend-card" id="weeklyTrendSection">
+        <h2 class="card-title"><span class="card-title-icon">&#128200;</span> Weekly Bricks Trend</h2>
+        <div class="chart-wrap chart-wrap--wide"><canvas id="chartWeeklyTrend"></canvas></div>
+      </section>
+
+      <!-- Materials needed tomorrow (all sites) -->
+      <section id="allMaterialsPanel"></section>
+
+      <!-- Weekly & monthly summary + active problems sidebar -->
+      <div class="summary-alerts-row">
+        <section class="weekly-summary" id="weeklySummary"></section>
+        <div id="alertsBanner"></div>
+      </div>
+
+      <!-- Completed sites collapsible panel -->
+      <div id="completedSitesPanel"></div>
+
+      <!-- Crew leaderboard -->
+      <div id="crewLeaderboardPanel"></div>
+
+    </div><!-- /#viewAll -->
+
+
+    <!-- ======================================================
+         SINGLE SITE VIEW
+         ====================================================== -->
+    <div id="viewSite" hidden>
+
+      <!-- Site label -->
+      <div class="job-label" id="jobLabel">—</div>
+
+      <!-- Boss note -->
+      <div class="boss-note" id="bossNote" hidden>
+        <div class="boss-note-icon">&#9733;</div>
+        <div class="boss-note-body">
+          <div class="boss-note-label">Boss needs to know</div>
+          <div class="boss-note-text" id="bossNoteText"></div>
+        </div>
+      </div>
+
+      <!-- KPI Cards -->
+      <section class="kpi-grid">
+
+        <div class="kpi-card">
+          <div class="kpi-icon kpi-icon--bricks">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><rect x="1" y="7" width="10" height="5" rx="1"/><rect x="13" y="7" width="10" height="5" rx="1"/><rect x="4" y="13" width="10" height="5" rx="1"/><rect x="16" y="13" width="7" height="5" rx="1"/><rect x="1" y="13" width="1" height="5" rx="0.5"/></svg>
+          </div>
+          <div class="kpi-body">
+            <div class="kpi-value" id="kpiBricks">—</div>
+            <div class="kpi-label">Bricks / Blocks Today</div>
+          </div>
+          <div class="kpi-trend" id="kpiBricksTrend"></div>
+        </div>
+
+        <div class="kpi-card">
+          <div class="kpi-icon kpi-icon--crew">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="7" r="3"/><circle cx="17" cy="8" r="2.5"/><path d="M1 20c0-4 3.6-7 8-7s8 3 8 7"/><path d="M17 14c2.7 0 5 2 5 5"/></svg>
+          </div>
+          <div class="kpi-body">
+            <div class="kpi-value" id="kpiCrew">—</div>
+            <div class="kpi-label">Crew on Site</div>
+          </div>
+        </div>
+
+        <div class="kpi-card kpi-card--progress">
+          <div class="kpi-icon kpi-icon--progress">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>
+          </div>
+          <div class="kpi-body">
+            <div class="kpi-value" id="kpiProgress">—</div>
+            <div class="kpi-label">Job Progress</div>
+            <div class="progress-bar-wrap">
+              <div class="progress-bar" id="progressBar"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="kpi-card">
+          <div class="kpi-icon kpi-icon--days">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+          </div>
+          <div class="kpi-body">
+            <div class="kpi-value" id="kpiDays">—</div>
+            <div class="kpi-label">Est. Days Remaining</div>
+          </div>
+        </div>
+
+        <div class="kpi-card">
+          <div class="kpi-icon kpi-icon--total">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
+          </div>
+          <div class="kpi-body">
+            <div class="kpi-value" id="kpiTotal">—</div>
+            <div class="kpi-label">Running Job Total</div>
+          </div>
+        </div>
+
+        <div class="kpi-card kpi-card--problems" id="problemsCard">
+          <div class="kpi-icon kpi-icon--problems">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13" stroke="#0a0a0a" stroke-width="2"/><line x1="12" y1="17" x2="12.01" y2="17" stroke="#0a0a0a" stroke-width="2"/></svg>
+          </div>
+          <div class="kpi-body">
+            <div class="kpi-value" id="kpiProblems">—</div>
+            <div class="kpi-label">Problems Flagged</div>
+          </div>
+        </div>
+
+      </section>
+
+      <!-- Site averages -->
+      <section class="site-averages" id="siteAverages"></section>
+
+      <!-- Info row -->
+      <section class="info-row">
+
+        <div class="info-card">
+          <h2 class="card-title">
+            <span class="card-title-icon">&#10003;</span> What Got Done Today
+          </h2>
+          <div class="done-today" id="doneTodayText">No data loaded</div>
+        </div>
+
+        <div class="info-card">
+          <h2 class="card-title">
+            <span class="card-title-icon">&#9888;</span> Active Problems
+          </h2>
+          <ul class="problem-list" id="problemList">
+            <li class="problem-item problem-item--empty">No data loaded</li>
+          </ul>
+        </div>
+
+        <div class="info-card">
+          <h2 class="card-title">
+            <span class="card-title-icon">&#128230;</span> Materials Needed Tomorrow
+          </h2>
+          <ul class="materials-list" id="materialsList">
+            <li class="materials-item materials-item--empty">No data loaded</li>
+          </ul>
+        </div>
+
+      </section>
+
+      <!-- Charts -->
+      <section class="charts-row">
+        <div class="chart-card">
+          <h2 class="card-title">Daily Bricks / Blocks Laid</h2>
+          <div class="chart-wrap"><canvas id="chartBricks"></canvas></div>
+        </div>
+        <div class="chart-card">
+          <h2 class="card-title">Job Progress Over Time</h2>
+          <div class="chart-wrap"><canvas id="chartProgress"></canvas></div>
+        </div>
+      </section>
+
+      <section class="chart-card chart-card--full">
+        <h2 class="card-title">Crew on Site — Weekly View</h2>
+        <div class="chart-wrap chart-wrap--wide"><canvas id="chartCrew"></canvas></div>
+      </section>
+
+      <!-- Data table -->
+      <section class="table-card">
+        <h2 class="card-title">Daily Log</h2>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Bricks Today</th>
+                <th>Running Total</th>
+                <th>Crew</th>
+                <th>Progress</th>
+                <th>Days Left</th>
+                <th>Problems</th>
+                <th>Materials Tomorrow</th>
+              </tr>
+            </thead>
+            <tbody id="tableBody">
+              <tr><td colspan="8" class="table-empty">Loading data…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+    </div><!-- /#viewSite -->
+
+
+    <!-- ======================================================
+         SERVICEM8 JOBS VIEW
+         ====================================================== -->
+    <div id="viewJobs" hidden>
+
+      <section class="jobs-section">
+
+        <!-- Revenue summary cards (rows 1 & 2 only) -->
+        <div class="jobs-revenue-grid" id="jobsRevenue"></div>
+
+        <!-- Action buttons row -->
+        <div class="jobs-actions-row">
+          <button class="jobs-action-btn" id="btnExportCSV">&#8681; Export CSV</button>
+          <button class="jobs-action-btn" id="btnShowProfit">&#36; Show Profit</button>
+        </div>
+
+        <!-- Search + filter controls -->
+        <div class="jobs-controls">
+          <input type="search" id="jobsSearch" class="jobs-search"
+                 placeholder="Search description or address…" autocomplete="off">
+          <div class="jobs-filter-pills" id="jobsFilterPills"></div>
+          <span class="jobs-count" id="jobsCount"></span>
+        </div>
+
+        <!-- Jobs table -->
+        <div class="table-card jobs-table-card">
+          <div class="table-wrap">
+            <table class="data-table" id="jobsTable">
+              <thead>
+                <tr>
+                  <th>Description</th>
+                  <th>Client</th>
+                  <th>Address</th>
+                  <th>Status</th>
+                  <th>Invoice</th>
+                  <th>Payment</th>
+                  <th>Date</th>
+                  <th class="jobs-col-chase"></th>
+                  <th class="jobs-col-profit" id="thProfit">Profit Est.</th>
+                </tr>
+              </thead>
+              <tbody id="jobsTableBody">
+                <tr><td colspan="7" class="table-empty">Loading jobs…</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </section>
+
+    </div><!-- /#viewJobs -->
+
+
+    <!-- ======================================================
+         PIPELINE VIEW
+         ====================================================== -->
+    <div id="viewPipeline" hidden>
+
+      <section class="jobs-section">
+
+        <!-- Projected revenue cards -->
+        <div class="sm8-section-label">Projected Revenue</div>
+        <div class="sm8-2col-grid" id="pipelineProjected"></div>
+
+        <!-- Quote conversion stats -->
+        <div class="sm8-section-label">Quote Conversion</div>
+        <div class="jobs-conversion-grid" id="pipelineConversion"></div>
+
+        <!-- Overdue / stale jobs -->
+        <div id="pipelineOverdue"></div>
+
+        <!-- Stale quotes (90+ days) -->
+        <div id="pipelineStaleQuotes"></div>
+
+      </section>
+
+    </div><!-- /#viewPipeline -->
+
+
+    <!-- ======================================================
+         FINANCE VIEW
+         ====================================================== -->
+    <div id="viewFinance" hidden>
+
+      <section class="jobs-section">
+
+        <!-- Projected revenue cards -->
+        <div class="sm8-section-label">Projected Revenue</div>
+        <div class="sm8-2col-grid" id="financeProjected"></div>
+
+        <!-- Revenue trend chart -->
+        <div class="sm8-section-label">Revenue Trend — Last 12 Months</div>
+        <div class="finance-chart-section">
+          <div class="finance-chart-wrap">
+            <canvas id="chartRevenue"></canvas>
+          </div>
+        </div>
+
+        <!-- Top Clients -->
+        <div class="sm8-section-label">Top Clients <span class="sm8-section-fy" id="financeTopClientsLabel"></span></div>
+        <div id="financeTopClients"></div>
+
+        <!-- Client Health Score -->
+        <div class="sm8-section-label">Client Health Scores</div>
+        <div id="financeClientHealth"></div>
+
+        <!-- Cash Flow Forecast -->
+        <div class="sm8-section-label">Cash Flow Forecast</div>
+        <div id="financeCashFlow"></div>
+
+        <!-- Brick Price Tracker -->
+        <div class="sm8-section-label">Material Price Watch</div>
+        <div id="financeBrickPrices"></div>
+
+        <!-- Profit Intelligence -->
+        <div class="sm8-section-label">&#128176; Profit Intelligence</div>
+        <div id="financeProfitIntel"></div>
+
+        <!-- Payroll Estimator -->
+        <div class="sm8-section-label">Payroll Estimator</div>
+        <div id="financePayroll"></div>
+
+      </section>
+
+    </div><!-- /#viewFinance -->
+
+
+    <!-- ======================================================
+         RISK REPORT VIEW
+         ====================================================== -->
+    <div id="viewRisk" hidden>
+      <section class="jobs-section">
+        <div class="sm8-section-label">Predictive Delay Engine — Risk Report</div>
+        <div id="riskReportContent"></div>
+      </section>
+    </div><!-- /#viewRisk -->
+
+
+    <!-- ======================================================
+         SUBBIES VIEW
+         ====================================================== -->
+    <div id="viewSubbies" hidden>
+      <section class="jobs-section">
+        <div class="subbies-header-row">
+          <div class="sm8-section-label" style="margin:0">Subcontractor Tracker</div>
+          <button class="btn-add-subbie" id="btnAddSubbie">&#43; Add Subbie</button>
+        </div>
+        <div id="subbiesContent"></div>
+      </section>
+    </div><!-- /#viewSubbies -->
+
+
+    <!-- ======================================================
+         SAFETY TAB VIEW
+         ====================================================== -->
+    <div id="viewSafety" hidden>
+      <section class="jobs-section">
+        <div class="safety-header-row">
+          <div class="sm8-section-label" style="margin:0">&#9925; Safety &amp; Compliance Logger</div>
+          <div class="safety-header-actions">
+            <button class="btn-add-subbie" id="btnLogTalk">&#43; Toolbox Talk</button>
+            <button class="btn-add-subbie btn-add-subbie--incident" id="btnLogIncident">&#9888; Log Incident</button>
+            <button class="btn-safety-export" id="btnExportSafety">&#8681; Export Report</button>
+          </div>
+        </div>
+        <div id="safetyKPIs"></div>
+        <div class="sm8-section-label" style="margin-top:1.5rem">Toolbox Talks</div>
+        <div id="safetyTalks"></div>
+        <div class="sm8-section-label" style="margin-top:1.5rem">Incident Log</div>
+        <div id="safetyIncidents"></div>
+      </section>
+    </div><!-- /#viewSafety -->
+
+  </main>
+
+  <footer class="site-footer">
+    <span>Dynasty Bricklaying Operations Dashboard</span>
+    <span class="footer-sep">|</span>
+    <span>Data sourced from Google Sheets</span>
+  </footer>
+
+  <!-- ======================================================
+       SITE DETAIL MODAL
+       ====================================================== -->
+  <div id="siteModal" class="site-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modalSiteName">
+    <div class="site-modal">
+      <div class="site-modal-header">
+        <div class="site-modal-title">
+          <span class="site-modal-name" id="modalSiteName"></span>
+          <span id="modalSiteBadge" class="site-card-badge"></span>
+        </div>
+        <div class="site-modal-actions">
+          <button class="btn-mark-complete" id="modalCompleteBtn">&#10003; Mark as Complete</button>
+          <button class="btn-modal-close" id="siteModalClose" aria-label="Close site details">&#10005;</button>
+        </div>
+      </div>
+      <div class="site-modal-body" id="siteModalBody"></div>
+    </div>
+  </div>
+
+  <!-- Settings Modal -->
+  <div id="settingsOverlay" class="settings-overlay" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+    <div class="settings-modal">
+      <div class="settings-header">
+        <span class="settings-title" id="settingsTitle">&#9881; Settings</span>
+        <button class="btn-modal-close" id="settingsClose" aria-label="Close settings">&#10005;</button>
+      </div>
+      <div class="settings-body">
+        <div class="settings-section-title">Change PIN</div>
+        <div>
+          <label class="settings-label" for="settingsCurrent">Current PIN</label>
+          <input id="settingsCurrent" class="settings-input" type="password" inputmode="numeric"
+                 maxlength="4" placeholder="••••" autocomplete="off" />
+        </div>
+        <div>
+          <label class="settings-label" for="settingsNew">New PIN</label>
+          <input id="settingsNew" class="settings-input" type="password" inputmode="numeric"
+                 maxlength="4" placeholder="••••" autocomplete="off" />
+        </div>
+        <div>
+          <label class="settings-label" for="settingsConfirm">Confirm New PIN</label>
+          <input id="settingsConfirm" class="settings-input" type="password" inputmode="numeric"
+                 maxlength="4" placeholder="••••" autocomplete="off" />
+        </div>
+        <button class="settings-save-btn" id="settingsSave">Save PIN</button>
+        <p class="settings-msg" id="settingsMsg"></p>
+        <div class="settings-divider"></div>
+        <div class="settings-section-title">Builder Portal</div>
+        <div class="settings-info-row">
+          <span class="settings-info-text">Share with builders: PIN <strong>7777</strong></span>
+          <button class="settings-save-btn settings-save-btn--secondary" id="btnShareBuilder">&#128203; Copy Share Link</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Client Portal Watermark (shown only in portal/builder mode) -->
+  <div id="portalWatermark" class="portal-watermark" hidden>Client View</div>
+  <div id="builderWatermark" class="portal-watermark portal-watermark--builder" hidden>Builder View</div>
+
+  <!-- ======================================================
+       AI WEEKLY SUMMARY MODAL
+       ====================================================== -->
+  <div id="weeklySummaryOverlay" class="ai-modal-overlay" role="dialog" aria-modal="true">
+    <div class="ai-modal">
+      <div class="ai-modal-header">
+        <span class="ai-modal-title">&#128200; AI Weekly Business Summary</span>
+        <div class="ai-modal-actions">
+          <button class="btn-ai-copy" id="btnCopySummary" title="Copy to clipboard">&#128203; Copy</button>
+          <button class="btn-modal-close" id="weeklySummaryClose" aria-label="Close">&#10005;</button>
+        </div>
+      </div>
+      <div class="ai-modal-body" id="weeklySummaryBody">
+        <div class="ai-loading">Generating summary…</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======================================================
+       MATERIALS CALCULATOR MODAL
+       ====================================================== -->
+  <div id="calcOverlay" class="ai-modal-overlay" role="dialog" aria-modal="true">
+    <div class="ai-modal ai-modal--wide">
+      <div class="ai-modal-header">
+        <span class="ai-modal-title">&#129523; Materials Calculator</span>
+        <button class="btn-modal-close" id="calcClose" aria-label="Close">&#10005;</button>
+      </div>
+      <div class="ai-modal-body">
+        <div class="calc-grid">
+          <div class="calc-col">
+            <h3 class="calc-section-title">Wall Dimensions</h3>
+            <div class="calc-field">
+              <label class="calc-label">Wall Length (m)</label>
+              <input type="number" id="calcLength" class="calc-input" value="10" min="0" step="0.1" />
+            </div>
+            <div class="calc-field">
+              <label class="calc-label">Wall Height (m)</label>
+              <input type="number" id="calcHeight" class="calc-input" value="2.4" min="0" step="0.1" />
+            </div>
+            <div class="calc-field">
+              <label class="calc-label">Wall Thickness</label>
+              <select id="calcThickness" class="calc-input">
+                <option value="single">Single Skin (110mm)</option>
+                <option value="double" selected>Double Skin (230mm)</option>
+                <option value="block">Block (190mm)</option>
+              </select>
+            </div>
+            <div class="calc-field">
+              <label class="calc-label">Brick Type</label>
+              <select id="calcBrickType" class="calc-input">
+                <option value="standard">Standard Brick (230×76×110)</option>
+                <option value="block">Concrete Block (390×190×190)</option>
+                <option value="jumbo">Jumbo Brick (290×90×90)</option>
+              </select>
+            </div>
+            <div class="calc-field">
+              <label class="calc-label">Bond Pattern</label>
+              <select id="calcBond" class="calc-input">
+                <option value="stretcher">Stretcher Bond</option>
+                <option value="flemish">Flemish Bond</option>
+                <option value="english">English Bond</option>
+              </select>
+            </div>
+            <div class="calc-field">
+              <label class="calc-label">Mortar Joint (mm)</label>
+              <input type="number" id="calcJoint" class="calc-input" value="10" min="5" max="15" step="1" />
+            </div>
+            <div class="calc-field">
+              <label class="calc-label">Openings (doors/windows) Area (m²)</label>
+              <input type="number" id="calcOpenings" class="calc-input" value="0" min="0" step="0.1" />
+            </div>
+            <button class="calc-run-btn" id="btnRunCalc">&#9654; Calculate</button>
+          </div>
+          <div class="calc-col">
+            <h3 class="calc-section-title">Results</h3>
+            <div id="calcResults" class="calc-results">
+              <p class="calc-hint">Fill in dimensions and click Calculate.</p>
+            </div>
+            <button class="calc-copy-btn" id="btnCopyCalc" hidden>&#128203; Copy Quote</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  </div><!-- /#dashboardRoot -->
+
+  <!-- ======================================================
+       AI CHAT BUBBLE + PANEL  (fixed overlay, outside dashboardRoot)
+       ====================================================== -->
+  <button class="ai-chat-bubble" id="aiChatBubble" title="AI Assistant"
+    onclick="var p=document.getElementById('aiChatPanel');p.style.display=p.style.display==='flex'?'none':'flex';if(p.style.display==='flex')document.getElementById('aiChatInput').focus();">
+    🧱
+  </button>
+  <div class="ai-chat-panel" id="aiChatPanel" style="display:none">
+    <div class="ai-chat-header">
+      <span class="ai-chat-title">Dynasty AI</span>
+      <button class="btn-modal-close" id="aiChatClose" aria-label="Close chat"
+        onclick="document.getElementById('aiChatPanel').style.display='none'">&#10005;</button>
+    </div>
+    <div class="ai-chat-messages" id="aiChatMessages">
+      <div class="ai-chat-msg ai-chat-msg--ai">
+        <div class="ai-chat-msg-text">G'day! I'm your Dynasty business assistant. Ask me anything about your jobs, revenue, crew, or site progress.</div>
+      </div>
+    </div>
+    <div class="ai-chat-input-row">
+      <input type="text" id="aiChatInput" class="ai-chat-input" placeholder="Ask something…" autocomplete="off" />
+      <button class="ai-chat-send" id="aiChatSend">&#10148;</button>
+    </div>
+  </div>
+
+  <!-- ======================================================
+       AI PLAN READER MODAL
+       ====================================================== -->
+  <div id="planReaderOverlay" class="ai-modal-overlay" role="dialog" aria-modal="true">
+    <div class="ai-modal ai-modal--wide">
+      <div class="ai-modal-header">
+        <span class="ai-modal-title">&#128196; AI Plan Reader — Bricklaying Estimator</span>
+        <button class="btn-modal-close" id="planReaderClose" aria-label="Close">&#10005;</button>
+      </div>
+      <div class="ai-modal-body">
+        <div id="planDropZone" class="plan-drop-zone">
+          <input type="file" id="planFileInput" accept=".pdf" hidden />
+          <div class="plan-drop-icon">&#128196;</div>
+          <div class="plan-drop-text">Drop a PDF building plan here, or <span class="plan-drop-link">click to upload</span></div>
+          <div class="plan-drop-hint">PDF is sent directly to Dynasty AI — max 4 MB</div>
+        </div>
+        <div id="planFileInfo" class="plan-file-info" hidden></div>
+        <button class="calc-run-btn" id="btnAnalysePlan" disabled style="margin-top:1rem">&#9654; Analyse Plan</button>
+        <div id="planResults" class="plan-results" hidden></div>
+        <button class="calc-copy-btn" id="btnCopyPlanQuote" hidden>&#128203; Copy Quote</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
