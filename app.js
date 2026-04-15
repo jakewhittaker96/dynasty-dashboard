@@ -2590,28 +2590,6 @@ setInterval(loadSheet, 5 * 60 * 1000);
     setTimeout(closeSettings, 1500);
   }
 
-  // Anthropic key
-  const keyInp      = document.getElementById('settingsAnthropicKey');
-  const saveKeyBtn  = document.getElementById('settingsSaveKey');
-  const keyMsgEl    = document.getElementById('settingsKeyMsg');
-  if (keyInp) {
-    keyInp.value = localStorage.getItem(ANTHROPIC_KEY_STORE) || '';
-  }
-  if (saveKeyBtn && keyInp) {
-    saveKeyBtn.addEventListener('click', () => {
-      const k = keyInp.value.trim();
-      if (k && !k.startsWith('sk-ant-')) {
-        keyMsgEl.textContent = 'Key should start with sk-ant-';
-        keyMsgEl.className   = 'settings-msg settings-msg--err';
-        return;
-      }
-      localStorage.setItem(ANTHROPIC_KEY_STORE, k);
-      keyMsgEl.textContent = k ? 'API key saved!' : 'API key cleared.';
-      keyMsgEl.className   = 'settings-msg settings-msg--ok';
-      setTimeout(() => { if (keyMsgEl) keyMsgEl.textContent = ''; }, 2000);
-    });
-  }
-
   // Share builder link
   const shareBtn = document.getElementById('btnShareBuilder');
   if (shareBtn) {
@@ -3397,10 +3375,6 @@ TOTAL ESTIMATE: ${fmtCurrency(totalCost)}`;
 // FEATURE 1 & 4 — AI CHAT ASSISTANT + AI WEEKLY SUMMARY
 // ═══════════════════════════════════════════════════════════════════════════════
 
-function getAnthropicKey() {
-  return localStorage.getItem(ANTHROPIC_KEY_STORE) || '';
-}
-
 function buildBusinessContext() {
   const parts = [];
 
@@ -3430,33 +3404,25 @@ function buildBusinessContext() {
   return parts.join('\n');
 }
 
+const AI_PROXY_URL = 'http://localhost:3001/api/chat';
+
 async function callClaudeAPI(messages, systemPrompt) {
-  const key = getAnthropicKey();
-  if (!key) throw new Error('No Anthropic API key set. Add it in Settings.');
-
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type':                      'application/json',
-      'x-api-key':                         key,
-      'anthropic-version':                 '2023-06-01',
-      'anthropic-dangerous-direct-browser-access': 'true',
-    },
-    body: JSON.stringify({
-      model:      'claude-sonnet-4-6',
-      max_tokens: 1024,
-      system:     systemPrompt,
-      messages,
-    }),
-  });
-
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.error?.message || `API error ${res.status}`);
+  let res;
+  try {
+    res = await fetch(AI_PROXY_URL, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ messages, system: systemPrompt }),
+    });
+  } catch (networkErr) {
+    throw new Error('AI proxy not running — double-click start.bat first, then try again.');
   }
 
-  const data = await res.json();
-  return data.content?.[0]?.text || '(No response)';
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(data.error || `Proxy error ${res.status}`);
+  }
+  return data.text || '(No response)';
 }
 
 // ─── AI Chat Panel ────────────────────────────────────────────────────────────
