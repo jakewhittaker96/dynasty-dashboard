@@ -4096,3 +4096,176 @@ textarea.calc-input { resize: vertical; font-family: inherit; }
   .gantt-row-label { width: 100px; min-width: 100px; }
   .gantt-row-name  { font-size: 0.65rem; }
 }
+
+/* ─── WEEKLY CALENDAR (schedule.js) ─────────────────────────────────────────── */
+.scal-wrap { padding: 1rem; }
+
+.scal-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+
+.scal-week-label {
+  font-weight: 600;
+  color: var(--gold);
+  font-size: 1rem;
+  flex: 1;
+  text-align: center;
+}
+
+.scal-nav-btn, .scal-today-btn, .scal-add-all-btn, .scal-crew-btn {
+  background: var(--surface-2);
+  border: 1px solid var(--border-dim);
+  color: var(--text);
+  padding: 0.4rem 0.8rem;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: 0.82rem;
+  transition: background 0.15s;
+}
+.scal-nav-btn:hover, .scal-today-btn:hover { background: var(--surface-3); }
+.scal-add-all-btn { border-color: var(--gold); color: var(--gold); }
+.scal-add-all-btn:hover { background: rgba(201,168,76,0.12); }
+.scal-crew-btn:hover { background: var(--surface-3); }
+
+.scal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 0.5rem;
+  min-height: 400px;
+}
+
+.scal-col {
+  background: var(--surface);
+  border: 1px solid var(--border-dim);
+  border-radius: var(--radius);
+  display: flex;
+  flex-direction: column;
+  min-height: 200px;
+}
+
+.scal-col--today {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 1px var(--gold);
+}
+
+.scal-col-header {
+  padding: 0.5rem 0.5rem 0.35rem;
+  border-bottom: 1px solid var(--border-dim);
+  text-align: center;
+  background: var(--surface-2);
+  border-radius: var(--radius) var(--radius) 0 0;
+}
+
+.scal-day-name {
+  display: block;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+
+.scal-day-date {
+  display: block;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text);
+  margin-top: 0.1rem;
+}
+
+.scal-today-badge {
+  display: inline-block;
+  background: var(--gold);
+  color: #111;
+  font-size: 0.62rem;
+  font-weight: 700;
+  padding: 0.1rem 0.35rem;
+  border-radius: 99px;
+  margin-top: 0.2rem;
+}
+
+.scal-col-body {
+  flex: 1;
+  padding: 0.4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.scal-card {
+  background: var(--surface-2);
+  border-left: 3px solid var(--gold);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  padding: 0.35rem 0.5rem;
+  cursor: pointer;
+  transition: background 0.15s;
+  position: relative;
+}
+.scal-card:hover { background: var(--surface-3); }
+
+.scal-card-title {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding-right: 1.2rem;
+}
+
+.scal-card-crew, .scal-card-note, .scal-card-multi {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  margin-top: 0.1rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.scal-card-del {
+  position: absolute;
+  top: 0.25rem;
+  right: 0.25rem;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 0.65rem;
+  padding: 0.1rem 0.25rem;
+  border-radius: 3px;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.scal-card:hover .scal-card-del { opacity: 1; }
+.scal-card-del:hover { background: rgba(200,60,60,0.2); color: #ff6b6b; }
+
+.scal-add-btn {
+  background: none;
+  border: 1px dashed var(--border-dim);
+  color: var(--text-muted);
+  width: 100%;
+  padding: 0.25rem;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: 0.72rem;
+  margin-top: auto;
+  transition: all 0.15s;
+}
+.scal-add-btn:hover {
+  border-color: var(--gold);
+  color: var(--gold);
+  background: rgba(201,168,76,0.06);
+}
+
+.sched-empty { color: var(--text-muted); font-size: 0.85rem; padding: 0.5rem 0; }
+
+@media (max-width: 900px) {
+  .scal-grid { grid-template-columns: repeat(4, 1fr); }
+}
+@media (max-width: 600px) {
+  .scal-grid { grid-template-columns: repeat(2, 1fr); }
+  .scal-week-label { font-size: 0.85rem; }
+}

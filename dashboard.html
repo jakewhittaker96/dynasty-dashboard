@@ -557,34 +557,7 @@
          SCHEDULE VIEW
          ====================================================== -->
     <div id="viewSchedule" hidden>
-      <section class="jobs-section">
-
-        <!-- Header row -->
-        <div class="sched-header-row">
-          <div class="sm8-section-label" id="schedHeading">&#128197; Job Schedule</div>
-          <div class="sched-header-actions">
-            <span id="schedSM8Badge" class="sched-sm8-badge" hidden>&#9679; Connected to ServiceM8</span>
-            <button class="btn-add-subbie" id="btnAddSchedJob">&#43; Add Job</button>
-            <button class="btn-add-subbie" id="btnAddSchedEvent">&#9873; Add Event</button>
-            <button class="btn-safety-export" id="btnSchedCrewSettings">&#128101; Crew</button>
-          </div>
-        </div>
-
-        <!-- Weather strip (14 days) -->
-        <div id="schedWeatherStrip" class="sched-weather-strip"></div>
-
-        <!-- Gantt chart -->
-        <div class="sched-gantt-wrap">
-          <div id="schedGantt" class="sched-gantt">
-            <div class="sched-gantt-loading">Loading schedule…</div>
-          </div>
-        </div>
-
-        <!-- Job cards list -->
-        <div class="sm8-section-label" style="margin-top:2rem">Job List</div>
-        <div id="schedJobCards" class="sched-job-cards"></div>
-
-      </section>
+      <!-- Weekly calendar rendered by schedule.js renderScheduleTab() -->
     </div><!-- /#viewSchedule -->
 
   </main>
@@ -790,5 +763,11 @@
   </div>
 
   <script src="app.js"></script>
+  <script src="servicem8.js"></script>
+  <script src="builder.js"></script>
+  <script src="subbies.js"></script>
+  <script src="ai.js"></script>
+  <script src="safety.js"></script>
+  <script src="schedule.js"></script>
 </body>
 </html>
