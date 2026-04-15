@@ -3376,29 +3376,77 @@ TOTAL ESTIMATE: ${fmtCurrency(totalCost)}`;
 // ═══════════════════════════════════════════════════════════════════════════════
 
 function buildBusinessContext() {
-  const parts = [];
+  const today = new Date().toLocaleDateString('en-AU', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+  const parts = [`Date: ${today}`, `Business: Dynasty Bricklaying & Pressure Cleaning (Australia)`];
 
-  // Sheet data
-  if (currentBySite && currentBySite.size) {
-    parts.push(`Active job sites: ${[...currentBySite.keys()].join(', ')}`);
-    for (const [site, rows] of currentBySite) {
-      const latest = rows[rows.length - 1];
-      parts.push(`${site}: ${latest.progress || 0}% complete, ${latest.daysLeft || 0} days left, ${latest.bricks || 0} bricks today${latest.problems ? ', PROBLEM: ' + latest.problems : ''}`);
+  // ── Google Sheets site data ─────────────────────────────────────────────────
+  if (currentBySite && currentBySite.size > 0) {
+    const completedSet = new Set(loadCompletedSites().map(s => s.name));
+    const activeSites  = [...currentBySite.entries()].filter(([n]) => !completedSet.has(n));
+    const doneSites    = [...currentBySite.entries()].filter(([n]) =>  completedSet.has(n));
+
+    parts.push(`\nACTIVE SITES (${activeSites.length}):`);
+    for (const [site, rows] of activeSites) {
+      const latest   = rows[rows.length - 1];
+      const total    = latest.calcRunningTotal || rows.reduce((s, r) => s + (r.bricks || 0), 0);
+      const weather  = latest.weatherDelay === 'Yes' ? ' [WEATHER DELAY]' : '';
+      const problem  = latest.problems ? ` [PROBLEM: ${latest.problems}]` : '';
+      const doneNote = latest.doneToday ? ` Done today: ${latest.doneToday}.` : '';
+      parts.push(`  • ${site}: ${latest.progress || 0}% complete, ${latest.daysLeft || 0} days left, ${latest.bricks || 0} bricks today (${total.toLocaleString()} total), crew: ${latest.crewName || latest.crew || '?'}${weather}${problem}${doneNote}`);
     }
+
+    if (doneSites.length) {
+      parts.push(`\nCOMPLETED SITES: ${doneSites.map(([n]) => n).join(', ')}`);
+    }
+  } else {
+    parts.push('\nSITE DATA: Not yet loaded (user has not refreshed the dashboard).');
   }
 
-  // SM8 data
+  // ── ServiceM8 jobs data ─────────────────────────────────────────────────────
   if (jobsLoaded && activeJobsData.length) {
     const completed  = activeJobsData.filter(j => j.status === 'Completed');
     const unpaid     = completed.filter(j => !isPaid(j));
+    const paid       = completed.filter(j =>  isPaid(j));
     const quotes     = activeJobsData.filter(j => j.status === 'Quote');
     const workOrders = activeJobsData.filter(j => j.status === 'Work Order');
+
     const totalInvoiced = completed.reduce((s, j) => s + parseFloat(j.total_invoice_amount || 0), 0);
     const totalUnpaid   = unpaid.reduce((s, j) => s + parseFloat(j.total_invoice_amount || 0), 0);
+    const totalPaid     = paid.reduce((s, j) => s + parseFloat(j.total_invoice_amount || 0), 0);
     const totalQuotes   = quotes.reduce((s, j) => s + parseFloat(j.total_invoice_amount || 0), 0);
 
-    parts.push(`ServiceM8 data: ${completed.length} completed jobs, ${workOrders.length} active work orders, ${quotes.length} quotes`);
-    parts.push(`Total invoiced: ${fmtCurrency(totalInvoiced)}, Outstanding: ${fmtCurrency(totalUnpaid)}, Pipeline (quotes): ${fmtCurrency(totalQuotes)}`);
+    parts.push(`\nSERVICEM8 JOBS SUMMARY:`);
+    parts.push(`  Completed jobs: ${completed.length} (${fmtCurrency(totalInvoiced)} invoiced)`);
+    parts.push(`  Paid: ${fmtCurrency(totalPaid)} | Outstanding: ${fmtCurrency(totalUnpaid)} (${unpaid.length} unpaid invoices)`);
+    parts.push(`  Active work orders: ${workOrders.length}`);
+    parts.push(`  Quotes in pipeline: ${quotes.length} (${fmtCurrency(totalQuotes)} potential revenue)`);
+
+    // List unpaid invoices individually (up to 10) so AI can discuss them
+    if (unpaid.length) {
+      parts.push(`\nUNPAID INVOICES (${unpaid.length} total):`);
+      unpaid.slice(0, 10).forEach(j => {
+        const client = sm8CompanyMap.get(j.company_uuid || '') || 'Unknown client';
+        const amt    = parseFloat(j.total_invoice_amount || 0);
+        const desc   = (j.job_description || '').split('\n')[0].trim().slice(0, 60) || 'No description';
+        const date   = (j.date || '').substring(0, 10);
+        parts.push(`  • ${client} — ${fmtCurrency(amt)} — "${desc}" (${date})`);
+      });
+      if (unpaid.length > 10) parts.push(`  … and ${unpaid.length - 10} more`);
+    }
+
+    // Recent completed jobs
+    const recent = completed.slice(0, 5);
+    if (recent.length) {
+      parts.push(`\nMOST RECENT COMPLETED JOBS:`);
+      recent.forEach(j => {
+        const client = sm8CompanyMap.get(j.company_uuid || '') || 'Unknown client';
+        const amt    = parseFloat(j.total_invoice_amount || 0);
+        const desc   = (j.job_description || '').split('\n')[0].trim().slice(0, 60) || 'No description';
+        parts.push(`  • ${client} — ${fmtCurrency(amt)} — "${desc}" — ${isPaid(j) ? 'PAID' : 'UNPAID'}`);
+      });
+    }
+  } else {
+    parts.push('\nSERVICEM8 DATA: Not yet loaded (user needs to open the Jobs or Finance tab first).');
   }
 
   return parts.join('\n');
@@ -3406,13 +3454,14 @@ function buildBusinessContext() {
 
 const AI_PROXY_URL = '/api/chat';
 
-async function callClaudeAPI(messages, systemPrompt) {
+// context = plain-text business data string; role = 'chat' | 'summary'
+async function callClaudeAPI(messages, context, role = 'chat') {
   let res;
   try {
     res = await fetch(AI_PROXY_URL, {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ messages, system: systemPrompt }),
+      body:    JSON.stringify({ messages, context, role }),
     });
   } catch (networkErr) {
     throw new Error('Could not reach AI endpoint — check your connection or Netlify deployment.');
@@ -3453,12 +3502,8 @@ async function sendChatMessage() {
   appendChatMsg('assistant', '…');
 
   try {
-    const system = `You are Dynasty AI, a business assistant for Dynasty Bricklaying, an Australian bricklaying and pressure cleaning business.
-Current business data:
-${buildBusinessContext()}
-Be concise, practical, and use Australian English. Answer questions about jobs, revenue, crew, delays, and business decisions.`;
-
-    const reply = await callClaudeAPI(aiChatHistory, system);
+    const context = buildBusinessContext();
+    const reply = await callClaudeAPI(aiChatHistory, context);
     aiChatHistory.push({ role: 'assistant', content: reply });
 
     // Replace the loading message
@@ -3504,13 +3549,12 @@ async function generateWeeklySummary() {
 
   try {
     const context = buildBusinessContext();
-    const today   = new Date().toLocaleDateString('en-AU', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-
-    const prompt = `Today is ${today}. Based on the following business data, write a plain-English weekly business summary for Dynasty Bricklaying. Include: overall performance, key sites, revenue/cash position, any risks or problems, and 3 recommended actions for next week. Use clear headings and bullet points.\n\nBusiness data:\n${context}`;
+    const prompt  = 'Write a plain-English weekly business summary for Dynasty Bricklaying. Include: overall performance, key sites, revenue/cash position, any risks or problems, and 3 recommended actions for next week. Use clear headings and bullet points.';
 
     const reply = await callClaudeAPI(
       [{ role: 'user', content: prompt }],
-      'You are Dynasty AI, a business analyst assistant for Dynasty Bricklaying, an Australian bricklaying and pressure cleaning business. Write professional, clear business summaries in plain Australian English.'
+      context,
+      'summary'
     );
 
     bodyEl.innerHTML = `<div class="ai-summary-text">${escHtml(reply).replace(/\n/g, '<br>').replace(/#{1,3} (.+?)(<br>|$)/g, '<strong>$1</strong>$2')}</div>`;
