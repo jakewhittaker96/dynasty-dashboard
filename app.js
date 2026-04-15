@@ -378,6 +378,8 @@ function parseCSV(csv) {
       problems:     c[9]  || '',
       materials:    c[10] || '',
       bossNote:     c[11] || '',
+      weatherDelay: (c[12] || '').trim(),   // "Yes" or "No"
+      photoUrl:     (c[13] || '').trim(),   // Google Drive file URL
     };
   }).filter(r => r.date || r.timestamp);
 
@@ -404,6 +406,12 @@ function groupBySite(rows) {
       if (!db) return 1;
       return da - db;
     });
+    // Compute cumulative running total from bricks column (replaces column F)
+    let running = 0;
+    for (const row of siteRows) {
+      running += row.bricks || 0;
+      row.calcRunningTotal = running;
+    }
   }
   return map;
 }
@@ -572,9 +580,8 @@ function renderSiteAverages(rows) {
     ? Math.round(withBricks.reduce((s, r) => s + r.bricks, 0) / withBricks.length)
     : 0;
 
-  // Prefer the running total from the latest row; fall back to summing daily bricks
   const latest      = rows[rows.length - 1];
-  const totalBricks = latest.runningTotal || rows.reduce((s, r) => s + (r.bricks || 0), 0);
+  const totalBricks = latest.calcRunningTotal || rows.reduce((s, r) => s + (r.bricks || 0), 0);
 
   const withCrew = rows.filter(r => r.crew > 0);
   const avgCrew  = withCrew.length > 0
@@ -959,24 +966,32 @@ function renderAllJobs(bySite) {
 
   // Active site summary cards (click opens modal)
   const cards = activeSites.map(([siteName, rows]) => {
-    const latest     = rows[rows.length - 1];
-    const problems   = rows.filter(r => r.problems && r.problems.trim());
-    const latestProb = problems.length ? problems[problems.length - 1].problems : null;
-    const latestMats = [...rows].reverse().find(r => r.materials && r.materials.trim());
-    const latestDone = [...rows].reverse().find(r => r.doneToday && r.doneToday.trim());
-    const prog   = Math.min(100, Math.max(0, latest.progress || 0));
-    const status = getSiteStatus(siteName, rows);
+    const latest       = rows[rows.length - 1];
+    const problems     = rows.filter(r => r.problems && r.problems.trim());
+    const latestProb   = problems.length ? problems[problems.length - 1].problems : null;
+    const latestMats   = [...rows].reverse().find(r => r.materials && r.materials.trim());
+    const latestDone   = [...rows].reverse().find(r => r.doneToday && r.doneToday.trim());
+    const prog         = Math.min(100, Math.max(0, latest.progress || 0));
+    const status       = getSiteStatus(siteName, rows);
+    const isWeather    = latest.weatherDelay === 'Yes';
+    const totalBricks  = latest.calcRunningTotal || rows.reduce((s, r) => s + (r.bricks || 0), 0);
+    // Add 1 day for weather delay
+    const daysLeft     = (latest.daysLeft || 0) + (isWeather ? 1 : 0);
+
+    const badgeHtml = isWeather
+      ? `<span class="site-card-badge site-card-badge--weather">&#127783; Weather Day</span>`
+      : status === 'problem'
+        ? `<span class="site-card-badge site-card-badge--problem">&#9888; Problem</span>`
+        : status === 'behind'
+          ? `<span class="site-card-badge site-card-badge--behind">&#9650; Behind</span>`
+          : `<span class="site-card-badge site-card-badge--ok">&#10003; On Track</span>`;
 
     return `
       <div class="site-card" data-site="${escHtml(siteName)}" role="button" tabindex="0"
            aria-label="View ${escHtml(siteName)} details">
         <div class="site-card-header">
           <span class="site-card-name">${escHtml(siteName)}</span>
-          ${status === 'problem'
-            ? `<span class="site-card-badge site-card-badge--problem">&#9888; Problem</span>`
-            : status === 'behind'
-              ? `<span class="site-card-badge site-card-badge--behind">&#9650; Behind</span>`
-              : `<span class="site-card-badge site-card-badge--ok">&#10003; On Track</span>`}
+          ${badgeHtml}
         </div>
 
         <div class="site-card-progress">
@@ -992,21 +1007,23 @@ function renderAllJobs(bySite) {
             <div class="site-card-stat-label">Bricks today</div>
           </div>
           <div class="site-card-stat">
-            <div class="site-card-stat-value">${latest.crew || '—'}</div>
-            <div class="site-card-stat-label">Crew</div>
+            <div class="site-card-stat-value">${totalBricks.toLocaleString()}</div>
+            <div class="site-card-stat-label">Total bricks</div>
           </div>
           <div class="site-card-stat">
-            <div class="site-card-stat-value">${latest.daysLeft || '—'}</div>
-            <div class="site-card-stat-label">Days left</div>
+            <div class="site-card-stat-value">${daysLeft || '—'}</div>
+            <div class="site-card-stat-label">Days left${isWeather ? ' (+1)' : ''}</div>
           </div>
         </div>
 
         ${latestDone
           ? `<div class="site-card-done">&#10003; ${escHtml(latestDone.doneToday)}</div>`
           : ''}
-        ${latestProb
-          ? `<div class="site-card-problem">&#9888; ${escHtml(latestProb)}</div>`
-          : ''}
+        ${isWeather
+          ? `<div class="site-card-weather">&#127783; Weather delay — day not counted</div>`
+          : latestProb
+            ? `<div class="site-card-problem">&#9888; ${escHtml(latestProb)}</div>`
+            : ''}
         ${latestMats
           ? `<div class="site-card-materials">&#128230; ${escHtml(latestMats.materials)}</div>`
           : ''}
@@ -1167,7 +1184,7 @@ function renderSite(rows, siteName) {
   dom.kpiCrew.textContent     = latest.crew || '0';
   dom.kpiProgress.textContent = latest.progress + '%';
   dom.kpiDays.textContent     = latest.daysLeft || '—';
-  dom.kpiTotal.textContent    = latest.runningTotal ? latest.runningTotal.toLocaleString() : '—';
+  dom.kpiTotal.textContent    = latest.calcRunningTotal ? latest.calcRunningTotal.toLocaleString() : '—';
   dom.progressBar.style.width = Math.min(100, Math.max(0, latest.progress)) + '%';
 
   // Brick trend vs previous day
@@ -1225,14 +1242,15 @@ function renderSite(rows, siteName) {
 
   // Table
   dom.tableBody.innerHTML = [...rows].reverse().map((r, i) => {
-    const isLatest = i === 0;
-    const hasProb  = r.problems && r.problems.trim();
-    const prog     = Math.min(100, r.progress || 0);
+    const isLatest   = i === 0;
+    const hasProb    = r.problems && r.problems.trim();
+    const isWeather  = r.weatherDelay === 'Yes';
+    const prog       = Math.min(100, r.progress || 0);
     return `<tr class="${isLatest ? 'row-latest' : ''} ${hasProb ? 'row-problem' : ''}">
-      <td>${formatDateShort(r.date)}</td>
+      <td>${formatDateShort(r.date)}${isWeather ? ' <span style="color:#60a5fa;font-size:0.75rem">&#127783;</span>' : ''}</td>
       <td>${r.bricks ? r.bricks.toLocaleString() : '—'}</td>
-      <td>${r.runningTotal ? r.runningTotal.toLocaleString() : '—'}</td>
-      <td>${r.crew || '—'}</td>
+      <td>${r.calcRunningTotal ? r.calcRunningTotal.toLocaleString() : '—'}</td>
+      <td>${r.crewName || r.crew || '—'}</td>
       <td>
         <div style="display:flex;align-items:center;gap:0.5rem;">
           <div style="background:var(--surface-3);border-radius:3px;height:5px;width:50px;overflow:hidden;flex-shrink:0">
@@ -1283,21 +1301,52 @@ function openSiteModal(siteName) {
   // ── Populate header ──────────────────────────────────────────────────────
   nameEl.textContent = siteName;
 
-  const status = getSiteStatus(siteName, rows);
-  badgeEl.className = 'site-card-badge site-card-badge--' +
-    (status === 'problem' ? 'problem' : status === 'behind' ? 'behind' : 'ok');
-  badgeEl.innerHTML = status === 'problem' ? '&#9888; Problem'
-    : status === 'behind'  ? '&#9650; Behind'
-    : '&#10003; On Track';
+  const latest0    = rows[rows.length - 1];
+  const isWeather0 = latest0.weatherDelay === 'Yes';
+  const status     = getSiteStatus(siteName, rows);
+
+  if (isWeather0) {
+    badgeEl.className = 'site-card-badge site-card-badge--weather';
+    badgeEl.innerHTML = '&#127783; Weather Day';
+  } else {
+    badgeEl.className = 'site-card-badge site-card-badge--' +
+      (status === 'problem' ? 'problem' : status === 'behind' ? 'behind' : 'ok');
+    badgeEl.innerHTML = status === 'problem' ? '&#9888; Problem'
+      : status === 'behind'  ? '&#9650; Behind'
+      : '&#10003; On Track';
+  }
 
   const isCompleted = loadCompletedSites().some(s => s.name === siteName);
   completeBtn.style.display = isCompleted ? 'none' : '';
 
   // ── Populate body ────────────────────────────────────────────────────────
   const latest      = rows[rows.length - 1];
+  const isWeather   = latest.weatherDelay === 'Yes';
   const prog        = Math.min(100, Math.max(0, latest.progress || 0));
-  const totalBricks = latest.runningTotal || rows.reduce((s, r) => s + (r.bricks || 0), 0);
+  const totalBricks = latest.calcRunningTotal || rows.reduce((s, r) => s + (r.bricks || 0), 0);
+  const weatherDays = rows.filter(r => r.weatherDelay === 'Yes').length;
+  const daysLeftAdj = (latest.daysLeft || 0) + (isWeather ? 1 : 0);
   const allProblems = rows.filter(r => r.problems && r.problems.trim());
+
+  // Build the photo URL — convert Google Drive share link to embeddable thumbnail if needed
+  const rawPhoto = latest.photoUrl || '';
+  let photoHtml  = '';
+  if (rawPhoto) {
+    // Drive share links: https://drive.google.com/file/d/FILE_ID/view?...
+    const driveMatch = rawPhoto.match(/\/file\/d\/([^/]+)/);
+    const imgSrc = driveMatch
+      ? `https://drive.google.com/thumbnail?id=${driveMatch[1]}&sz=w800`
+      : rawPhoto;
+    photoHtml = `
+      <h3 class="modal-section-title">&#128247; Today's Progress Photo</h3>
+      <div class="modal-photo-wrap">
+        <a href="${escHtml(rawPhoto)}" target="_blank" rel="noopener" class="modal-photo-link">
+          <img src="${escHtml(imgSrc)}" alt="Progress photo" class="modal-photo-thumb"
+               onerror="this.closest('.modal-photo-wrap').innerHTML='<p class=modal-photo-err>Photo unavailable — <a href=\\'${escHtml(rawPhoto)}\\' target=\\'_blank\\'>open link</a></p>'" />
+          <span class="modal-photo-hint">Click to open full size &#8599;</span>
+        </a>
+      </div>`;
+  }
 
   bodyEl.innerHTML = `
     <div class="modal-kpi-row">
@@ -1316,14 +1365,21 @@ function openSiteModal(siteName) {
         <div class="modal-kpi-label">Crew</div>
       </div>
       <div class="modal-kpi">
-        <div class="modal-kpi-value">${latest.daysLeft || '—'}</div>
-        <div class="modal-kpi-label">Days left</div>
+        <div class="modal-kpi-value${isWeather ? ' modal-kpi-value--weather' : ''}">${daysLeftAdj || '—'}</div>
+        <div class="modal-kpi-label">Days left${isWeather ? ' (+1 weather)' : ''}</div>
       </div>
       <div class="modal-kpi">
         <div class="modal-kpi-value">${totalBricks.toLocaleString()}</div>
         <div class="modal-kpi-label">Total bricks</div>
       </div>
+      ${weatherDays > 0 ? `
+      <div class="modal-kpi modal-kpi--weather">
+        <div class="modal-kpi-value modal-kpi-value--weather">&#127783; ${weatherDays}</div>
+        <div class="modal-kpi-label">Weather day${weatherDays !== 1 ? 's' : ''}</div>
+      </div>` : ''}
     </div>
+
+    ${photoHtml}
 
     <h3 class="modal-section-title">
       Daily Log
@@ -1339,12 +1395,13 @@ function openSiteModal(siteName) {
         </thead>
         <tbody>
           ${[...rows].reverse().map((r, i) => {
-            const hasProb = r.problems && r.problems.trim();
+            const hasProb     = r.problems && r.problems.trim();
+            const rowWeather  = r.weatherDelay === 'Yes';
             return `<tr class="${i === 0 ? 'row-latest' : ''} ${hasProb ? 'row-problem' : ''}">
-              <td>${formatDateShort(r.date)}</td>
+              <td>${formatDateShort(r.date)}${rowWeather ? ' <span style="color:#60a5fa;font-size:0.75rem" title="Weather delay">&#127783;</span>' : ''}</td>
               <td>${r.bricks ? r.bricks.toLocaleString() : '—'}</td>
-              <td>${r.runningTotal ? r.runningTotal.toLocaleString() : '—'}</td>
-              <td>${r.crew || '—'}</td>
+              <td>${r.calcRunningTotal ? r.calcRunningTotal.toLocaleString() : '—'}</td>
+              <td>${escHtml(r.crewName || String(r.crew) || '—')}</td>
               <td class="modal-td-wrap">${escHtml(r.doneToday || '—')}</td>
               <td class="modal-td-wrap">${hasProb
                 ? `<span style="color:var(--red)">${escHtml(r.problems)}</span>`
@@ -1507,10 +1564,9 @@ function renderCrewLeaderboard(bySite) {
       // Skip purely numeric entries (crew count, not names)
       if (/^\d+(\.\d+)?$/.test(rawName)) continue;
 
-      // Split on comma, semicolon, period, or whitespace — handles
-      // "Henry. Jhy. Tommy." and "Henry. Alex Tommy" and "Jake, Tom"
+      // Split on commas only — checkbox values formatted as "Tommy, Henry, Alex"
       const parts = rawName
-        .split(/[,;.\s]+/)
+        .split(',')
         .map(n => n.trim())
         .filter(n => n.length > 1 && !/^\d+$/.test(n));
 
