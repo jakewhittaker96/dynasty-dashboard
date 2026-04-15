@@ -6,14 +6,16 @@
 'use strict';
 
 // ─── PIN storage (module-level so settings can update them) ──────────────────
-const PIN_KEY        = 'dynasty-pin';
-const PORTAL_PIN_KEY = 'dynasty-portal-pin';
-let currentFullPin   = localStorage.getItem(PIN_KEY)        || '1234';
-const PORTAL_PIN     = localStorage.getItem(PORTAL_PIN_KEY) || '9999';
+const PIN_KEY             = 'dynasty-pin';
+const PORTAL_PIN_KEY      = 'dynasty-portal-pin';
+const ANTHROPIC_KEY_STORE = 'dynasty-anthropic-key';
+const BUILDER_PIN         = '7777';
+let currentFullPin        = localStorage.getItem(PIN_KEY)        || '1234';
+const PORTAL_PIN          = localStorage.getItem(PORTAL_PIN_KEY) || '9999';
 
-function isPortal() {
-  return sessionStorage.getItem('dynasty-mode') === 'portal';
-}
+function isPortal()  { return sessionStorage.getItem('dynasty-mode') === 'portal'; }
+function isBuilder() { return sessionStorage.getItem('dynasty-mode') === 'builder'; }
+function isFullMode(){ return sessionStorage.getItem('dynasty-mode') === 'full'; }
 
 // ─── PIN Authentication ───────────────────────────────────────────────────────
 (function initAuth() {
@@ -33,6 +35,10 @@ function isPortal() {
       const wm = document.getElementById('portalWatermark');
       if (wm) wm.hidden = false;
     }
+    if (mode === 'builder') {
+      const wm = document.getElementById('builderWatermark');
+      if (wm) wm.hidden = false;
+    }
   }
 
   // Already authenticated this session
@@ -41,6 +47,10 @@ function isPortal() {
     dashboard.hidden = false;
     if (isPortal()) {
       const wm = document.getElementById('portalWatermark');
+      if (wm) wm.hidden = false;
+    }
+    if (isBuilder()) {
+      const wm = document.getElementById('builderWatermark');
       if (wm) wm.hidden = false;
     }
     return;
@@ -54,6 +64,9 @@ function isPortal() {
     } else if (pin === PORTAL_PIN) {
       loginError.hidden = true;
       unlock('portal');
+    } else if (pin === BUILDER_PIN) {
+      loginError.hidden = true;
+      unlock('builder');
     } else {
       loginError.hidden = false;
       pinInput.value = '';
@@ -102,6 +115,31 @@ let sm8CompanyMap    = new Map(); // uuid → company_name, populated on first S
 let showProfit         = false;   // whether Profit column is visible
 let showOldWorkOrders  = true;    // show Work Orders older than 90 days in overdue panel
 
+// ─── Weather & new feature state ─────────────────────────────────────────────
+const siteWeatherCache = new Map(); // siteName → { fetched, data, rain3day }
+const WEATHER_TTL      = 30 * 60 * 1000; // 30 min cache TTL
+
+function loadSubbies() {
+  try { return JSON.parse(localStorage.getItem('dynasty-subbies') || '[]'); } catch { return []; }
+}
+function saveSubbies(arr) { localStorage.setItem('dynasty-subbies', JSON.stringify(arr)); }
+
+const DEFAULT_BRICK_PRICES = [
+  { name: 'Standard Red Brick',     unit: '1000 bricks', price: 980,  updated: null },
+  { name: 'Cream Face Brick',       unit: '1000 bricks', price: 1250, updated: null },
+  { name: 'Concrete Block 190mm',   unit: '100 blocks',  price: 290,  updated: null },
+  { name: 'Mortar (Bagged Mix)',     unit: '40kg bag',    price: 14,   updated: null },
+  { name: 'Besser Block 390mm',     unit: '100 blocks',  price: 310,  updated: null },
+];
+function loadBrickPrices() {
+  try {
+    const saved = JSON.parse(localStorage.getItem('dynasty-brick-prices') || 'null');
+    if (!saved || !Array.isArray(saved)) return DEFAULT_BRICK_PRICES.map(p => ({...p}));
+    return saved;
+  } catch { return DEFAULT_BRICK_PRICES.map(p => ({...p})); }
+}
+function saveBrickPrices(arr) { localStorage.setItem('dynasty-brick-prices', JSON.stringify(arr)); }
+
 // ─── Business filter ─────────────────────────────────────────────────────────
 const BIZ_KEY = 'dynasty-biz-filter';
 let activeBiz = localStorage.getItem(BIZ_KEY) || 'all'; // 'all' | 'bricklaying' | 'pressure'
@@ -140,6 +178,8 @@ const dom = {
   viewJobs:        $('viewJobs'),
   viewPipeline:    $('viewPipeline'),
   viewFinance:     $('viewFinance'),
+  viewRisk:        $('viewRisk'),
+  viewSubbies:     $('viewSubbies'),
   // Jobs tab
   jobsRevenue:     $('jobsRevenue'),
   jobsSearch:      $('jobsSearch'),
@@ -432,19 +472,23 @@ function buildTabs(bySite) {
     dom.tabBar.appendChild(btn);
   };
 
+  const builder = isBuilder();
+
   makeTab('__all__', 'All Jobs', null);
-  if (!portal) {
+  if (!portal && !builder) {
     makeTab('__jobs__',     'Jobs',     null);
     makeTab('__pipeline__', 'Pipeline', null);
     makeTab('__finance__',  'Finance',  null);
+    makeTab('__risk__',     'Risk Report', null);
+    makeTab('__subbies__',  'Subbies',  null);
   }
 
-  // Hide biz toggle in portal mode
+  // Hide biz toggle in portal/builder mode
   const bizToggle = document.getElementById('bizToggle');
-  if (bizToggle) bizToggle.style.display = portal ? 'none' : '';
+  if (bizToggle) bizToggle.style.display = (portal || builder) ? 'none' : '';
 
-  // If portal mode and current tab is not allowed, switch to all
-  if (portal && activeTab !== '__all__') {
+  // If restricted mode and current tab is not allowed, switch to all
+  if ((portal || builder) && activeTab !== '__all__') {
     activeTab = '__all__';
   }
 }
@@ -494,6 +538,8 @@ function switchTab(siteKey) {
     dom.viewJobs.hidden     = id !== 'jobs';
     dom.viewPipeline.hidden = id !== 'pipeline';
     dom.viewFinance.hidden  = id !== 'finance';
+    if (dom.viewRisk)    dom.viewRisk.hidden    = id !== 'risk';
+    if (dom.viewSubbies) dom.viewSubbies.hidden = id !== 'subbies';
   };
 
   if (siteKey === '__all__') {
@@ -508,6 +554,12 @@ function switchTab(siteKey) {
   } else if (siteKey === '__finance__') {
     showOnly('finance');
     loadServiceM8Data('__finance__');
+  } else if (siteKey === '__risk__') {
+    showOnly('risk');
+    renderRiskTab();
+  } else if (siteKey === '__subbies__') {
+    showOnly('subbies');
+    renderSubbiesTab();
   }
 }
 
@@ -940,6 +992,9 @@ function renderAllMaterials(bySite) {
 
 // ─── All Jobs overview ────────────────────────────────────────────────────────
 function renderAllJobs(bySite) {
+  // Builder mode gets a clean card-only view
+  if (isBuilder()) { renderBuilderView(bySite); return; }
+
   const completedSet = new Set(loadCompletedSites().map(s => s.name));
 
   // Split sites into active and completed
@@ -1014,6 +1069,10 @@ function renderAllJobs(bySite) {
             <div class="site-card-stat-value">${daysLeft || '—'}</div>
             <div class="site-card-stat-label">Days left${isWeather ? ' (+1)' : ''}</div>
           </div>
+          <div class="site-card-stat">
+            <div class="site-card-stat-value site-weather-badge" data-site-weather="${escHtml(siteName)}">…</div>
+            <div class="site-card-stat-label">Weather</div>
+          </div>
         </div>
 
         ${latestDone
@@ -1039,6 +1098,8 @@ function renderAllJobs(bySite) {
   renderAlertsBanner(bySite);
   renderCompletedSites(bySite);
   renderCrewLeaderboard(bySite);
+  // Async weather load — populates data-site-weather badges after render
+  loadWeatherForAllSites(bySite);
 
   // Click / keyboard nav on site cards → open site detail modal
   dom.siteCardsGrid.querySelectorAll('.site-card').forEach(card => {
@@ -1809,6 +1870,9 @@ function renderFinanceTabContent() {
 
   renderRevenueChart(bizJobs);
   renderTopClients(bizJobs);
+  renderClientHealth(bizJobs);
+  renderCashFlowForecast(bizJobs);
+  renderBrickPriceTracker();
 }
 
 // ─── Revenue trend chart (Finance tab) ───────────────────────────────────────
@@ -2396,7 +2460,7 @@ async function loadSheet() {
   buildTabs(currentBySite);
 
   // If the previously active site tab no longer exists, fall back to All Jobs
-  const sm8Tabs = new Set(['__jobs__', '__pipeline__', '__finance__']);
+  const sm8Tabs = new Set(['__jobs__', '__pipeline__', '__finance__', '__risk__', '__subbies__']);
   if (activeTab !== '__all__' && !sm8Tabs.has(activeTab) && !currentBySite.has(activeTab)) {
     activeTab = '__all__';
   }
@@ -2425,6 +2489,12 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Escape') {
     const settingsOv = document.getElementById('settingsOverlay');
     if (settingsOv && settingsOv.classList.contains('is-open')) { settingsOv.classList.remove('is-open'); return; }
+    const aiSummOv = document.getElementById('weeklySummaryOverlay');
+    if (aiSummOv && aiSummOv.classList.contains('is-open')) { aiSummOv.classList.remove('is-open'); return; }
+    const calcOv = document.getElementById('calcOverlay');
+    if (calcOv && calcOv.classList.contains('is-open')) { calcOv.classList.remove('is-open'); return; }
+    const chatPanel = document.getElementById('aiChatPanel');
+    if (chatPanel && !chatPanel.hidden) { chatPanel.hidden = true; return; }
     const modal = document.getElementById('siteModal');
     if (modal && modal.classList.contains('is-open')) { closeSiteModal(); return; }
   }
@@ -2520,6 +2590,40 @@ setInterval(loadSheet, 5 * 60 * 1000);
     setTimeout(closeSettings, 1500);
   }
 
+  // Anthropic key
+  const keyInp      = document.getElementById('settingsAnthropicKey');
+  const saveKeyBtn  = document.getElementById('settingsSaveKey');
+  const keyMsgEl    = document.getElementById('settingsKeyMsg');
+  if (keyInp) {
+    keyInp.value = localStorage.getItem(ANTHROPIC_KEY_STORE) || '';
+  }
+  if (saveKeyBtn && keyInp) {
+    saveKeyBtn.addEventListener('click', () => {
+      const k = keyInp.value.trim();
+      if (k && !k.startsWith('sk-ant-')) {
+        keyMsgEl.textContent = 'Key should start with sk-ant-';
+        keyMsgEl.className   = 'settings-msg settings-msg--err';
+        return;
+      }
+      localStorage.setItem(ANTHROPIC_KEY_STORE, k);
+      keyMsgEl.textContent = k ? 'API key saved!' : 'API key cleared.';
+      keyMsgEl.className   = 'settings-msg settings-msg--ok';
+      setTimeout(() => { if (keyMsgEl) keyMsgEl.textContent = ''; }, 2000);
+    });
+  }
+
+  // Share builder link
+  const shareBtn = document.getElementById('btnShareBuilder');
+  if (shareBtn) {
+    shareBtn.addEventListener('click', () => {
+      const msg = `Track your job progress live: ${location.href.split('?')[0]} — Builder PIN: ${BUILDER_PIN}`;
+      navigator.clipboard.writeText(msg).then(
+        () => showToast('Share link copied to clipboard!', 'success'),
+        () => showToast('Could not copy — please copy manually.', 'error')
+      );
+    });
+  }
+
   btnSettings.addEventListener('click', openSettings);
   closeBtn.addEventListener('click', closeSettings);
   saveBtn.addEventListener('click', savePin);
@@ -2550,6 +2654,926 @@ setInterval(loadSheet, 5 * 60 * 1000);
     if (jobsLoaded) applyJobsFilters();
   });
 })();
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// FEATURE 2 — LIVE WEATHER PER SITE
+// ═══════════════════════════════════════════════════════════════════════════════
+
+async function geocodeSite(address) {
+  const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address + ', Australia')}&limit=1`;
+  try {
+    const res  = await fetch(url, { headers: { 'User-Agent': 'DynastyDashboard/1.0' } });
+    const data = await res.json();
+    if (data && data[0]) return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) };
+  } catch { /* silent */ }
+  return null;
+}
+
+async function fetchSiteWeather(siteName) {
+  const cached = siteWeatherCache.get(siteName);
+  if (cached && (Date.now() - cached.fetched) < WEATHER_TTL) return cached;
+
+  const coords = await geocodeSite(siteName);
+  if (!coords) return null;
+
+  try {
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${coords.lat}&longitude=${coords.lon}` +
+      `&daily=weathercode,temperature_2m_max,precipitation_probability_max&timezone=Australia/Sydney&forecast_days=7`;
+    const res  = await fetch(url);
+    const json = await res.json();
+    const daily = json.daily;
+    if (!daily) return null;
+
+    const days = daily.time.map((t, i) => ({
+      date:      t,
+      code:      daily.weathercode[i],
+      maxTemp:   daily.temperature_2m_max[i],
+      rainProb:  daily.precipitation_probability_max[i] || 0,
+    }));
+
+    // Rain risk: any of next 3 days >60% rain probability
+    const rain3day = days.slice(0, 3).some(d => d.rainProb > 60);
+
+    const result = { fetched: Date.now(), days, rain3day, lat: coords.lat, lon: coords.lon };
+    siteWeatherCache.set(siteName, result);
+    return result;
+  } catch { return null; }
+}
+
+function weatherCodeIcon(code) {
+  if (code <= 1)  return '☀';
+  if (code <= 3)  return '⛅';
+  if (code <= 49) return '🌫';
+  if (code <= 67) return '🌧';
+  if (code <= 79) return '❄';
+  if (code <= 82) return '🌦';
+  if (code <= 99) return '⛈';
+  return '🌡';
+}
+
+// Fetch weather for all sites and inject badges on site cards
+async function loadWeatherForAllSites(bySite) {
+  for (const [siteName] of bySite) {
+    fetchSiteWeather(siteName).then(weather => {
+      if (!weather) return;
+      // Inject weather onto the card if it exists
+      const cards = document.querySelectorAll('[data-site-weather]');
+      cards.forEach(el => {
+        if (el.dataset.siteWeather === siteName) {
+          const today = weather.days[0];
+          el.textContent = `${weatherCodeIcon(today.code)} ${Math.round(today.maxTemp)}°C`;
+          el.title = weather.rain3day ? '⚠ Rain risk in next 3 days' : '';
+          el.classList.toggle('site-weather--rain-risk', weather.rain3day);
+        }
+      });
+    });
+  }
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// FEATURE 3 — BUILDER PORTAL VIEW (renderAllJobs override when isBuilder())
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function renderBuilderView(bySite) {
+  const grid = dom.siteCardsGrid;
+  if (!grid) return;
+
+  // Hide sections not relevant to builders
+  ['weeklyTrendSection', 'allMaterialsPanel', 'weeklySummary', 'alertsBanner',
+   'completedSitesPanel', 'crewLeaderboardPanel', 'completionCountdown'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.hidden = true;
+  });
+  // Hide header action buttons not for builders
+  ['btnWeeklySummary', 'btnCalculate', 'btnSettings', 'bizToggle'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = 'none';
+  });
+  // Hide overview KPIs row
+  const kpiGrid = document.querySelector('#viewAll .kpi-grid');
+  if (kpiGrid) kpiGrid.hidden = true;
+
+  let html = '';
+  for (const [siteName, rows] of bySite) {
+    const latest  = rows[rows.length - 1];
+    const prog    = Math.min(100, Math.max(0, latest.progress || 0));
+    const daysLeft= (latest.daysLeft || 0) + (latest.weatherDelay === 'Yes' ? 1 : 0);
+    const status  = getSiteStatus(siteName, rows);
+    const isWeather = latest.weatherDelay === 'Yes';
+    const badgeLbl  = isWeather ? '☁ Weather Day'
+      : status === 'problem' ? '⚠ Problem'
+      : status === 'behind'  ? '▲ Behind'
+      : '✓ On Track';
+    const badgeCls = isWeather ? 'site-card-badge--weather'
+      : status === 'problem' ? 'site-card-badge--problem'
+      : status === 'behind'  ? 'site-card-badge--behind'
+      : 'site-card-badge--ok';
+
+    const rawPhoto = latest.photoUrl || '';
+    let photoThumb = '';
+    if (rawPhoto) {
+      const m = rawPhoto.match(/\/file\/d\/([^/]+)/);
+      const src = m ? `https://drive.google.com/thumbnail?id=${m[1]}&sz=w400` : rawPhoto;
+      photoThumb = `<div class="builder-card-photo"><img src="${escHtml(src)}" alt="Progress" loading="lazy" /></div>`;
+    }
+
+    const weatherEl = `<span class="site-weather-badge" data-site-weather="${escHtml(siteName)}">…</span>`;
+
+    html += `
+      <div class="builder-card">
+        <div class="builder-card-header">
+          <span class="builder-card-name">${escHtml(siteName)}</span>
+          <span class="site-card-badge ${badgeCls}">${badgeLbl}</span>
+        </div>
+        ${photoThumb}
+        <div class="builder-card-progress-wrap">
+          <div class="builder-card-progress-bar" style="width:${prog}%"></div>
+        </div>
+        <div class="builder-card-stats">
+          <div class="builder-stat"><div class="builder-stat-val">${prog}%</div><div class="builder-stat-lbl">Complete</div></div>
+          <div class="builder-stat"><div class="builder-stat-val">${daysLeft > 0 ? daysLeft + 'd' : '—'}</div><div class="builder-stat-lbl">Est. Days Left</div></div>
+          <div class="builder-stat">${weatherEl}<div class="builder-stat-lbl">Today</div></div>
+        </div>
+        ${latest.doneToday ? `<div class="builder-card-done"><strong>Today:</strong> ${escHtml(latest.doneToday)}</div>` : ''}
+      </div>`;
+  }
+
+  grid.innerHTML = html || '<p class="table-empty">No active sites</p>';
+
+  // Load weather async
+  loadWeatherForAllSites(bySite);
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// FEATURE 5 — PREDICTIVE DELAY ENGINE (Risk Report Tab)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function calcRiskScore(siteName, rows, weather) {
+  const latest   = rows[rows.length - 1];
+  let score      = 0;
+  const factors  = [];
+
+  // Progress behind schedule
+  const prog = latest.progress || 0;
+  const daysL = latest.daysLeft || 0;
+  if (prog < 50 && daysL < 5)  { score += 40; factors.push('Less than 50% done with few days left'); }
+  else if (prog < 30)           { score += 20; factors.push('Low progress percentage'); }
+
+  // Days left increasing
+  const firstDays = rows[0].daysLeft;
+  if (firstDays > 0 && daysL > firstDays * 1.3) {
+    score += 25;
+    factors.push(`Estimated days left grew from ${firstDays} to ${daysL}`);
+  }
+
+  // Active problem
+  if (latest.problems && latest.problems.trim()) {
+    score += 25;
+    factors.push(`Active problem: "${latest.problems.trim()}"`);
+  }
+
+  // Weather delay flag
+  if (latest.weatherDelay === 'Yes') {
+    score += 10;
+    factors.push('Current weather delay');
+  }
+
+  // Forecasted rain risk
+  if (weather && weather.rain3day) {
+    score += 15;
+    factors.push('Rain forecast in next 3 days (>60% probability)');
+  }
+
+  score = Math.min(100, score);
+  const level = score >= 60 ? 'high' : score >= 30 ? 'medium' : 'low';
+
+  const recs = [];
+  if (level === 'high') {
+    recs.push('Review completion timeline with foreman immediately');
+    recs.push('Consider adding crew resources');
+    if (weather && weather.rain3day) recs.push('Schedule weather-sensitive work for later in the week');
+  } else if (level === 'medium') {
+    recs.push('Monitor daily progress closely');
+    if (latest.problems) recs.push('Resolve flagged problem to prevent further delays');
+  } else {
+    recs.push('No immediate action required');
+  }
+
+  return { score, level, factors, recs };
+}
+
+function renderRiskTab() {
+  const el = document.getElementById('riskReportContent');
+  if (!el) return;
+
+  if (!currentBySite || currentBySite.size === 0) {
+    el.innerHTML = '<p class="table-empty">No site data loaded — refresh first.</p>';
+    return;
+  }
+
+  el.innerHTML = '<p class="risk-loading">Analysing sites…</p>';
+
+  const siteList = [...currentBySite.entries()];
+
+  Promise.all(siteList.map(async ([siteName, rows]) => {
+    const weather = await fetchSiteWeather(siteName).catch(() => null);
+    return { siteName, rows, weather };
+  })).then(results => {
+    const scored = results.map(({ siteName, rows, weather }) => ({
+      siteName,
+      rows,
+      weather,
+      ...calcRiskScore(siteName, rows, weather),
+    })).sort((a, b) => b.score - a.score);
+
+    const levelLabel = { high: '🔴 High Risk', medium: '🟡 Medium Risk', low: '🟢 Low Risk' };
+    const levelCls   = { high: 'risk-card--high', medium: 'risk-card--medium', low: 'risk-card--low' };
+
+    el.innerHTML = scored.map(s => {
+      const today = s.weather && s.weather.days[0];
+      const weatherSnip = today
+        ? `<span class="risk-weather">${weatherCodeIcon(today.code)} ${Math.round(today.maxTemp)}°C${s.weather.rain3day ? ' ⚠ Rain risk' : ''}</span>`
+        : '';
+
+      return `
+        <div class="risk-card ${levelCls[s.level]}">
+          <div class="risk-card-header">
+            <span class="risk-card-name">${escHtml(s.siteName)}</span>
+            <div class="risk-card-meta">
+              ${weatherSnip}
+              <span class="risk-badge risk-badge--${s.level}">${levelLabel[s.level]} (${s.score}/100)</span>
+            </div>
+          </div>
+          <div class="risk-card-body">
+            <div class="risk-col">
+              <div class="risk-col-title">Risk Factors</div>
+              <ul class="risk-list">${s.factors.map(f => `<li>${escHtml(f)}</li>`).join('') || '<li>None identified</li>'}</ul>
+            </div>
+            <div class="risk-col">
+              <div class="risk-col-title">Recommendations</div>
+              <ul class="risk-list risk-list--recs">${s.recs.map(r => `<li>${escHtml(r)}</li>`).join('')}</ul>
+            </div>
+          </div>
+        </div>`;
+    }).join('');
+  });
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// FEATURE 6 — CLIENT HEALTH SCORE (Finance Tab)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function renderClientHealth(jobs) {
+  const el = document.getElementById('financeClientHealth');
+  if (!el) return;
+
+  const completed = jobs.filter(j => j.status === 'Completed');
+  const clientMap = new Map();
+
+  for (const j of completed) {
+    const uuid = j.company_uuid || '__unknown__';
+    const name = sm8CompanyMap.get(uuid) || (uuid === '__unknown__' ? '(Unknown)' : uuid.slice(0, 8));
+    if (!clientMap.has(uuid)) clientMap.set(uuid, { name, jobs: [], totalRevenue: 0 });
+    clientMap.get(uuid).jobs.push(j);
+    clientMap.get(uuid).totalRevenue += parseFloat(j.total_invoice_amount || 0);
+  }
+
+  if (!clientMap.size) {
+    el.innerHTML = '<p class="finance-loading">No completed job data available</p>';
+    return;
+  }
+
+  const now = Date.now();
+  const MS  = 1000 * 60 * 60 * 24;
+
+  const clients = [...clientMap.values()].map(c => {
+    const jobCount   = c.jobs.length;
+    const avgValue   = c.totalRevenue / jobCount;
+    const paidCount  = c.jobs.filter(isPaid).length;
+    const payRate    = jobCount > 0 ? paidCount / jobCount : 0;
+
+    // Avg days to payment (paid jobs only)
+    const paidTimes = c.jobs.filter(isPaid).map(j => {
+      const d = new Date((j.date || '').substring(0, 10) + 'T00:00:00');
+      return isNaN(d) ? 30 : Math.min((now - d) / MS, 90);
+    });
+    const avgPayDays = paidTimes.length > 0
+      ? paidTimes.reduce((a, b) => a + b, 0) / paidTimes.length
+      : 60;
+
+    // Score components (0–100 each)
+    const paySpeedScore  = Math.max(0, 100 - avgPayDays);        // faster = higher
+    const payRateScore   = payRate * 100;
+    const repeatScore    = Math.min(100, (jobCount - 1) * 20);   // 5+ jobs = max
+    const valueScore     = Math.min(100, (avgValue / 500) * 20); // $2500 avg = max
+
+    const score = Math.round(0.35 * paySpeedScore + 0.30 * payRateScore + 0.20 * repeatScore + 0.15 * valueScore);
+
+    return { ...c, score, jobCount, avgValue, payRate };
+  }).sort((a, b) => b.score - a.score);
+
+  const badge = score => {
+    if (score >= 80) return '<span class="health-badge health-badge--green">⭐ Best Client</span>';
+    if (score >= 50) return '<span class="health-badge health-badge--gold">✓ Good</span>';
+    return '<span class="health-badge health-badge--red">⚠ Review Relationship</span>';
+  };
+
+  el.innerHTML = `
+    <div class="health-wrap">
+      <table class="health-table">
+        <thead><tr>
+          <th>Client</th>
+          <th style="text-align:right">Score</th>
+          <th style="text-align:right">Jobs</th>
+          <th style="text-align:right">Avg Value</th>
+          <th style="text-align:right">Pay Rate</th>
+          <th>Status</th>
+        </tr></thead>
+        <tbody>
+          ${clients.map(c => `<tr>
+            <td class="health-name">${escHtml(c.name)}</td>
+            <td style="text-align:right"><span class="health-score health-score--${c.score >= 80 ? 'green' : c.score >= 50 ? 'gold' : 'red'}">${c.score}</span></td>
+            <td style="text-align:right">${c.jobCount}</td>
+            <td style="text-align:right">${fmtCurrency(c.avgValue)}</td>
+            <td style="text-align:right">${Math.round(c.payRate * 100)}%</td>
+            <td>${badge(c.score)}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>`;
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// FEATURE 7 — CASH FLOW FORECAST (Finance Tab)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const CASH_FLOW_WAGES_KEY = 'dynasty-weekly-wages';
+
+function renderCashFlowForecast(jobs) {
+  const el = document.getElementById('financeCashFlow');
+  if (!el) return;
+
+  const weeklyWages = parseFloat(localStorage.getItem(CASH_FLOW_WAGES_KEY) || '8000');
+
+  const now    = Date.now();
+  const MS     = 1000 * 60 * 60 * 24;
+
+  // Unpaid completed invoices — expected income
+  const unpaidCompleted = jobs.filter(j => j.status === 'Completed' && !isPaid(j)).map(j => {
+    const amt  = parseFloat(j.total_invoice_amount || 0);
+    const d    = new Date((j.date || '').substring(0, 10) + 'T00:00:00');
+    const age  = isNaN(d) ? 30 : (now - d) / MS;
+    return { amt, age };
+  });
+
+  // Pipeline quotes (potential income)
+  const quoteIncome = jobs.filter(j => j.status === 'Quote')
+    .reduce((s, j) => s + parseFloat(j.total_invoice_amount || 0), 0);
+
+  const expectedIn30 = unpaidCompleted.filter(j => j.age <= 30).reduce((s, j) => s + j.amt, 0);
+  const expectedIn60 = unpaidCompleted.filter(j => j.age <= 60).reduce((s, j) => s + j.amt, 0);
+  const expectedIn90 = unpaidCompleted.reduce((s, j) => s + j.amt, 0);
+
+  const wagesPerPeriod = { d30: weeklyWages * 4.3, d60: weeklyWages * 8.6, d90: weeklyWages * 13 };
+
+  const net30 = expectedIn30 - wagesPerPeriod.d30;
+  const net60 = expectedIn60 - wagesPerPeriod.d60;
+  const net90 = expectedIn90 - wagesPerPeriod.d90;
+
+  const cashCard = (label, income, wages, net) => {
+    const cls = net < 0 ? 'cashflow-card--red' : 'cashflow-card--ok';
+    return `
+      <div class="cashflow-card ${cls}">
+        <div class="cashflow-period">${label}</div>
+        <div class="cashflow-row"><span>Expected in</span><span class="cashflow-in">${fmtCurrency(income)}</span></div>
+        <div class="cashflow-row"><span>Wages out</span><span class="cashflow-out">-${fmtCurrency(wages)}</span></div>
+        <div class="cashflow-row cashflow-net"><span>Net</span><span class="${net < 0 ? 'cashflow-neg' : 'cashflow-pos'}">${net < 0 ? '-' : '+'}${fmtCurrency(Math.abs(net))}</span></div>
+      </div>`;
+  };
+
+  el.innerHTML = `
+    <div class="cashflow-wrap">
+      <div class="cashflow-config">
+        <label class="cashflow-wages-label">Weekly Wages ($)</label>
+        <input type="number" id="cashFlowWages" class="cashflow-wages-input" value="${weeklyWages}" min="0" step="500" />
+        <button class="cashflow-wages-save" id="btnSaveWages">Update</button>
+        <span class="cashflow-pipeline-note">Pipeline (quotes): ${fmtCurrency(quoteIncome)}</span>
+      </div>
+      <div class="cashflow-cards-grid">
+        ${cashCard('30 Days', expectedIn30, wagesPerPeriod.d30, net30)}
+        ${cashCard('60 Days', expectedIn60, wagesPerPeriod.d60, net60)}
+        ${cashCard('90 Days', expectedIn90, wagesPerPeriod.d90, net90)}
+      </div>
+    </div>`;
+
+  document.getElementById('btnSaveWages')?.addEventListener('click', () => {
+    const v = parseFloat(document.getElementById('cashFlowWages')?.value || '8000');
+    if (!isNaN(v) && v >= 0) {
+      localStorage.setItem(CASH_FLOW_WAGES_KEY, String(v));
+      renderCashFlowForecast(jobs);
+      showToast('Wages updated', 'success', 2000);
+    }
+  });
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// FEATURE 8 — SUBCONTRACTOR TRACKER (Subbies Tab)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+let subbieEditId = null; // null = add mode, string = edit mode (subbie uuid)
+
+function renderSubbiesTab() {
+  const el = document.getElementById('subbiesContent');
+  if (!el) return;
+
+  const subbies = loadSubbies().sort((a, b) => (b.reliability || 0) - (a.reliability || 0));
+
+  if (!subbies.length) {
+    el.innerHTML = '<p class="table-empty" style="padding:24px 0">No subcontractors added yet. Click "+ Add Subbie" to get started.</p>';
+    return;
+  }
+
+  const stars = n => '★'.repeat(n || 0) + '☆'.repeat(5 - (n || 0));
+
+  el.innerHTML = `
+    <div class="subbies-grid">
+      ${subbies.map(s => `
+        <div class="subbie-card" data-id="${escHtml(s.id)}">
+          <div class="subbie-card-header">
+            <span class="subbie-name">${escHtml(s.name)}</span>
+            <span class="subbie-trade">${escHtml(s.trade || '—')}</span>
+          </div>
+          <div class="subbie-stats">
+            <div class="subbie-stat"><span class="subbie-stat-lbl">Day Rate</span><span class="subbie-stat-val">$${escHtml(String(s.dayRate || '—'))}</span></div>
+            <div class="subbie-stat"><span class="subbie-stat-lbl">Phone</span><span class="subbie-stat-val">${escHtml(s.phone || '—')}</span></div>
+            <div class="subbie-stat"><span class="subbie-stat-lbl">Jobs</span><span class="subbie-stat-val">${escHtml(String(s.jobsWorked || 0))}</span></div>
+          </div>
+          <div class="subbie-ratings">
+            <span class="subbie-rating-lbl">Reliability</span>
+            <span class="subbie-stars subbie-stars--gold" title="${s.reliability || 0}/5">${stars(s.reliability)}</span>
+            <span class="subbie-rating-lbl">Quality</span>
+            <span class="subbie-stars subbie-stars--gold" title="${s.quality || 0}/5">${stars(s.quality)}</span>
+          </div>
+          ${s.notes ? `<div class="subbie-notes">${escHtml(s.notes)}</div>` : ''}
+          <div class="subbie-actions">
+            <button class="subbie-btn subbie-btn--edit" data-edit="${escHtml(s.id)}">Edit</button>
+            <button class="subbie-btn subbie-btn--delete" data-delete="${escHtml(s.id)}">Delete</button>
+          </div>
+        </div>`).join('')}
+    </div>`;
+
+  el.querySelectorAll('[data-edit]').forEach(btn =>
+    btn.addEventListener('click', () => openSubbieForm(btn.dataset.edit))
+  );
+  el.querySelectorAll('[data-delete]').forEach(btn =>
+    btn.addEventListener('click', () => {
+      if (!confirm('Delete this subcontractor?')) return;
+      const arr = loadSubbies().filter(s => s.id !== btn.dataset.delete);
+      saveSubbies(arr);
+      renderSubbiesTab();
+      showToast('Subcontractor deleted', 'info', 2000);
+    })
+  );
+}
+
+function openSubbieForm(editId = null) {
+  subbieEditId = editId;
+  const existing = editId ? loadSubbies().find(s => s.id === editId) : null;
+  const v = existing || { name: '', trade: '', dayRate: '', phone: '', jobsWorked: 0, reliability: 3, quality: 3, notes: '' };
+
+  let overlay = document.getElementById('subbieFormOverlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'subbieFormOverlay';
+    overlay.className = 'ai-modal-overlay';
+    overlay.setAttribute('role', 'dialog');
+    overlay.setAttribute('aria-modal', 'true');
+    document.body.appendChild(overlay);
+  }
+
+  overlay.innerHTML = `
+    <div class="ai-modal">
+      <div class="ai-modal-header">
+        <span class="ai-modal-title">${editId ? 'Edit' : 'Add'} Subcontractor</span>
+        <button class="btn-modal-close" id="subbieFormClose">&#10005;</button>
+      </div>
+      <div class="ai-modal-body">
+        <div class="subbie-form">
+          <div class="subbie-form-row">
+            <label class="calc-label">Name *</label>
+            <input id="sf_name" class="calc-input" value="${escHtml(v.name)}" placeholder="Full name" />
+          </div>
+          <div class="subbie-form-row">
+            <label class="calc-label">Trade</label>
+            <input id="sf_trade" class="calc-input" value="${escHtml(v.trade || '')}" placeholder="e.g. Bricklayer, Plasterer" />
+          </div>
+          <div class="subbie-form-row">
+            <label class="calc-label">Day Rate ($)</label>
+            <input id="sf_rate" class="calc-input" type="number" value="${escHtml(String(v.dayRate || ''))}" min="0" />
+          </div>
+          <div class="subbie-form-row">
+            <label class="calc-label">Phone</label>
+            <input id="sf_phone" class="calc-input" value="${escHtml(v.phone || '')}" placeholder="04XX XXX XXX" />
+          </div>
+          <div class="subbie-form-row">
+            <label class="calc-label">Jobs Worked</label>
+            <input id="sf_jobs" class="calc-input" type="number" value="${escHtml(String(v.jobsWorked || 0))}" min="0" />
+          </div>
+          <div class="subbie-form-row">
+            <label class="calc-label">Reliability (1–5)</label>
+            <input id="sf_rely" class="calc-input" type="number" value="${v.reliability || 3}" min="1" max="5" />
+          </div>
+          <div class="subbie-form-row">
+            <label class="calc-label">Quality (1–5)</label>
+            <input id="sf_qual" class="calc-input" type="number" value="${v.quality || 3}" min="1" max="5" />
+          </div>
+          <div class="subbie-form-row">
+            <label class="calc-label">Notes</label>
+            <textarea id="sf_notes" class="calc-input" rows="2" placeholder="Any notes…">${escHtml(v.notes || '')}</textarea>
+          </div>
+          <button class="calc-run-btn" id="subbieFormSave">${editId ? 'Save Changes' : 'Add Subcontractor'}</button>
+        </div>
+      </div>
+    </div>`;
+
+  overlay.classList.add('is-open');
+
+  document.getElementById('subbieFormClose')?.addEventListener('click', () => overlay.classList.remove('is-open'));
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.classList.remove('is-open'); });
+
+  document.getElementById('subbieFormSave')?.addEventListener('click', () => {
+    const name = document.getElementById('sf_name')?.value.trim();
+    if (!name) { showToast('Name is required', 'error'); return; }
+
+    const arr = loadSubbies();
+    const entry = {
+      id:          editId || ('s' + Date.now()),
+      name,
+      trade:       document.getElementById('sf_trade')?.value.trim() || '',
+      dayRate:     parseFloat(document.getElementById('sf_rate')?.value || 0) || 0,
+      phone:       document.getElementById('sf_phone')?.value.trim() || '',
+      jobsWorked:  parseInt(document.getElementById('sf_jobs')?.value || 0, 10) || 0,
+      reliability: Math.min(5, Math.max(1, parseInt(document.getElementById('sf_rely')?.value || 3, 10))),
+      quality:     Math.min(5, Math.max(1, parseInt(document.getElementById('sf_qual')?.value || 3, 10))),
+      notes:       document.getElementById('sf_notes')?.value.trim() || '',
+    };
+
+    if (editId) {
+      const idx = arr.findIndex(s => s.id === editId);
+      if (idx !== -1) arr[idx] = entry; else arr.push(entry);
+    } else {
+      arr.push(entry);
+    }
+
+    saveSubbies(arr);
+    overlay.classList.remove('is-open');
+    renderSubbiesTab();
+    showToast(editId ? 'Subcontractor updated' : 'Subcontractor added', 'success', 2000);
+  });
+}
+
+// Wire up Add Subbie button
+(function initSubbies() {
+  const btn = document.getElementById('btnAddSubbie');
+  if (btn) btn.addEventListener('click', () => openSubbieForm(null));
+})();
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// FEATURE 9 & 10 — MATERIALS CALCULATOR + BRICK PRICE TRACKER
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function renderBrickPriceTracker() {
+  const el = document.getElementById('financeBrickPrices');
+  if (!el) return;
+
+  const prices = loadBrickPrices();
+
+  el.innerHTML = `
+    <div class="brick-prices-wrap">
+      <table class="brick-prices-table">
+        <thead><tr>
+          <th>Material</th>
+          <th>Unit</th>
+          <th style="text-align:right">Price</th>
+          <th>Last Updated</th>
+          <th></th>
+        </tr></thead>
+        <tbody>
+          ${prices.map((p, i) => `<tr>
+            <td>${escHtml(p.name)}</td>
+            <td class="brick-prices-unit">${escHtml(p.unit)}</td>
+            <td style="text-align:right" class="brick-prices-price">
+              $<input type="number" class="brick-price-input" data-idx="${i}" value="${p.price}" min="0" step="1" />
+            </td>
+            <td class="brick-prices-date">${p.updated ? new Date(p.updated).toLocaleDateString('en-GB') : '—'}</td>
+            <td><button class="brick-price-save-btn" data-save="${i}">&#10003; Update</button></td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>`;
+
+  el.querySelectorAll('[data-save]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const i   = parseInt(btn.dataset.save, 10);
+      const inp = el.querySelector(`[data-idx="${i}"]`);
+      const val = parseFloat(inp?.value || 0);
+      if (isNaN(val) || val < 0) { showToast('Invalid price', 'error'); return; }
+      prices[i].price   = val;
+      prices[i].updated = Date.now();
+      saveBrickPrices(prices);
+      renderBrickPriceTracker();
+      showToast(`${prices[i].name} price updated`, 'success', 2000);
+    });
+  });
+}
+
+// ─── Materials Calculator Logic ───────────────────────────────────────────────
+
+const BRICK_CONFIGS = {
+  standard: { l: 0.230, h: 0.076, perM2Single: null },  // calculated
+  block:    { l: 0.390, h: 0.190, perM2Single: null },
+  jumbo:    { l: 0.290, h: 0.090, perM2Single: null },
+};
+
+function calcBricksPerM2(type, joint) {
+  const cfg = BRICK_CONFIGS[type] || BRICK_CONFIGS.standard;
+  const j   = (joint || 10) / 1000;
+  return 1 / ((cfg.l + j) * (cfg.h + j));
+}
+
+function runMaterialsCalc() {
+  const length   = parseFloat(document.getElementById('calcLength')?.value  || 0);
+  const height   = parseFloat(document.getElementById('calcHeight')?.value  || 0);
+  const thick    = document.getElementById('calcThickness')?.value || 'double';
+  const brickType= document.getElementById('calcBrickType')?.value || 'standard';
+  const bond     = document.getElementById('calcBond')?.value     || 'stretcher';
+  const joint    = parseFloat(document.getElementById('calcJoint')?.value   || 10);
+  const openings = parseFloat(document.getElementById('calcOpenings')?.value|| 0);
+
+  if (!length || !height) {
+    showToast('Please enter valid dimensions', 'error');
+    return;
+  }
+
+  const wallArea  = Math.max(0, (length * height) - openings);
+  const skins     = thick === 'single' ? 1 : thick === 'block' ? 1 : 2;
+  const bondMult  = bond === 'english' ? 1.1 : bond === 'flemish' ? 1.05 : 1.0;
+  const perM2     = calcBricksPerM2(brickType, joint);
+  const bricksNet = wallArea * perM2 * skins * bondMult;
+  const bricksWaste = Math.ceil(bricksNet * 1.10); // +10% wastage
+
+  // Mortar: approx 1 bag per 50 standard bricks (0.02 bags/brick)
+  const mortarBags = Math.ceil(bricksWaste * 0.022);
+
+  // Weight: standard brick ≈ 3.5kg, block ≈ 12kg
+  const brickWeight = brickType === 'block' ? 12 : brickType === 'jumbo' ? 4.5 : 3.5;
+  const totalWeightKg = Math.round(bricksWaste * brickWeight);
+
+  // Cost from price tracker
+  const prices = loadBrickPrices();
+  const brickPriceEntry = brickType === 'block' ? prices[2] : brickType === 'jumbo' ? prices[0] : prices[0];
+  const mortarPriceEntry = prices[3];
+  const brickCostPer1000 = brickPriceEntry ? brickPriceEntry.price : 1000;
+  const mortarCostPerBag = mortarPriceEntry ? mortarPriceEntry.price : 14;
+  const brickCost   = (bricksWaste / 1000) * brickCostPer1000;
+  const mortarCost  = mortarBags * mortarCostPerBag;
+  const totalCost   = brickCost + mortarCost;
+
+  const resultsEl  = document.getElementById('calcResults');
+  const copyBtn    = document.getElementById('btnCopyCalc');
+  if (!resultsEl) return;
+
+  const resultText = `
+Wall: ${length}m × ${height}m = ${wallArea.toFixed(1)} m² (net)
+Bricks required: ${bricksWaste.toLocaleString()} (incl. 10% wastage)
+Mortar bags: ${mortarBags}
+Total weight: ${(totalWeightKg / 1000).toFixed(1)} tonnes
+Estimated brick cost: ${fmtCurrency(brickCost)}
+Estimated mortar cost: ${fmtCurrency(mortarCost)}
+TOTAL ESTIMATE: ${fmtCurrency(totalCost)}`;
+
+  resultsEl.innerHTML = `
+    <div class="calc-result-row"><span>Wall area (net)</span><strong>${wallArea.toFixed(1)} m²</strong></div>
+    <div class="calc-result-row"><span>Bricks (+ 10% wastage)</span><strong>${bricksWaste.toLocaleString()}</strong></div>
+    <div class="calc-result-row"><span>Mortar bags (40kg)</span><strong>${mortarBags}</strong></div>
+    <div class="calc-result-row"><span>Total weight</span><strong>${(totalWeightKg / 1000).toFixed(1)} t</strong></div>
+    <div class="calc-result-divider"></div>
+    <div class="calc-result-row"><span>Brick cost est.</span><strong>${fmtCurrency(brickCost)}</strong></div>
+    <div class="calc-result-row"><span>Mortar cost est.</span><strong>${fmtCurrency(mortarCost)}</strong></div>
+    <div class="calc-result-row calc-result-total"><span>TOTAL ESTIMATE</span><strong>${fmtCurrency(totalCost)}</strong></div>`;
+
+  if (copyBtn) {
+    copyBtn.hidden = false;
+    copyBtn.onclick = () => {
+      navigator.clipboard.writeText(resultText).then(
+        () => showToast('Quote copied to clipboard!', 'success'),
+        () => showToast('Copy failed', 'error')
+      );
+    };
+  }
+}
+
+(function initCalculator() {
+  const btnOpen  = document.getElementById('btnCalculate');
+  const overlay  = document.getElementById('calcOverlay');
+  const closeBtn = document.getElementById('calcClose');
+  const runBtn   = document.getElementById('btnRunCalc');
+  if (!overlay) return;
+
+  if (btnOpen)  btnOpen.addEventListener('click',  () => overlay.classList.add('is-open'));
+  if (closeBtn) closeBtn.addEventListener('click', () => overlay.classList.remove('is-open'));
+  if (runBtn)   runBtn.addEventListener('click',   runMaterialsCalc);
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.classList.remove('is-open'); });
+})();
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// FEATURE 1 & 4 — AI CHAT ASSISTANT + AI WEEKLY SUMMARY
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function getAnthropicKey() {
+  return localStorage.getItem(ANTHROPIC_KEY_STORE) || '';
+}
+
+function buildBusinessContext() {
+  const parts = [];
+
+  // Sheet data
+  if (currentBySite && currentBySite.size) {
+    parts.push(`Active job sites: ${[...currentBySite.keys()].join(', ')}`);
+    for (const [site, rows] of currentBySite) {
+      const latest = rows[rows.length - 1];
+      parts.push(`${site}: ${latest.progress || 0}% complete, ${latest.daysLeft || 0} days left, ${latest.bricks || 0} bricks today${latest.problems ? ', PROBLEM: ' + latest.problems : ''}`);
+    }
+  }
+
+  // SM8 data
+  if (jobsLoaded && activeJobsData.length) {
+    const completed  = activeJobsData.filter(j => j.status === 'Completed');
+    const unpaid     = completed.filter(j => !isPaid(j));
+    const quotes     = activeJobsData.filter(j => j.status === 'Quote');
+    const workOrders = activeJobsData.filter(j => j.status === 'Work Order');
+    const totalInvoiced = completed.reduce((s, j) => s + parseFloat(j.total_invoice_amount || 0), 0);
+    const totalUnpaid   = unpaid.reduce((s, j) => s + parseFloat(j.total_invoice_amount || 0), 0);
+    const totalQuotes   = quotes.reduce((s, j) => s + parseFloat(j.total_invoice_amount || 0), 0);
+
+    parts.push(`ServiceM8 data: ${completed.length} completed jobs, ${workOrders.length} active work orders, ${quotes.length} quotes`);
+    parts.push(`Total invoiced: ${fmtCurrency(totalInvoiced)}, Outstanding: ${fmtCurrency(totalUnpaid)}, Pipeline (quotes): ${fmtCurrency(totalQuotes)}`);
+  }
+
+  return parts.join('\n');
+}
+
+async function callClaudeAPI(messages, systemPrompt) {
+  const key = getAnthropicKey();
+  if (!key) throw new Error('No Anthropic API key set. Add it in Settings.');
+
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type':                      'application/json',
+      'x-api-key':                         key,
+      'anthropic-version':                 '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true',
+    },
+    body: JSON.stringify({
+      model:      'claude-sonnet-4-6',
+      max_tokens: 1024,
+      system:     systemPrompt,
+      messages,
+    }),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error?.message || `API error ${res.status}`);
+  }
+
+  const data = await res.json();
+  return data.content?.[0]?.text || '(No response)';
+}
+
+// ─── AI Chat Panel ────────────────────────────────────────────────────────────
+
+const aiChatHistory = []; // { role: 'user'|'assistant', content: string }
+
+function appendChatMsg(role, text) {
+  const msgs = document.getElementById('aiChatMessages');
+  if (!msgs) return;
+  const div = document.createElement('div');
+  div.className = `ai-chat-msg ai-chat-msg--${role === 'user' ? 'user' : 'ai'}`;
+  div.innerHTML = `<div class="ai-chat-msg-text">${escHtml(text).replace(/\n/g, '<br>')}</div>`;
+  msgs.appendChild(div);
+  msgs.scrollTop = msgs.scrollHeight;
+}
+
+async function sendChatMessage() {
+  const inp  = document.getElementById('aiChatInput');
+  const sendBtn = document.getElementById('aiChatSend');
+  const text = inp?.value.trim();
+  if (!text) return;
+
+  inp.value = '';
+  appendChatMsg('user', text);
+  aiChatHistory.push({ role: 'user', content: text });
+
+  if (sendBtn) sendBtn.disabled = true;
+  appendChatMsg('assistant', '…');
+
+  try {
+    const system = `You are Dynasty AI, a business assistant for Dynasty Bricklaying, an Australian bricklaying and pressure cleaning business.
+Current business data:
+${buildBusinessContext()}
+Be concise, practical, and use Australian English. Answer questions about jobs, revenue, crew, delays, and business decisions.`;
+
+    const reply = await callClaudeAPI(aiChatHistory, system);
+    aiChatHistory.push({ role: 'assistant', content: reply });
+
+    // Replace the loading message
+    const msgs   = document.getElementById('aiChatMessages');
+    const last   = msgs?.lastElementChild;
+    if (last) last.querySelector('.ai-chat-msg-text').innerHTML = escHtml(reply).replace(/\n/g, '<br>');
+  } catch (err) {
+    const msgs = document.getElementById('aiChatMessages');
+    const last = msgs?.lastElementChild;
+    if (last) last.querySelector('.ai-chat-msg-text').textContent = '⚠ ' + err.message;
+    aiChatHistory.pop();
+  } finally {
+    if (sendBtn) sendBtn.disabled = false;
+  }
+}
+
+(function initAIChat() {
+  const bubble   = document.getElementById('aiChatBubble');
+  const panel    = document.getElementById('aiChatPanel');
+  const closeBtn = document.getElementById('aiChatClose');
+  const sendBtn  = document.getElementById('aiChatSend');
+  const inp      = document.getElementById('aiChatInput');
+  if (!bubble || !panel) return;
+
+  bubble.addEventListener('click', () => {
+    panel.hidden = !panel.hidden;
+    if (!panel.hidden) inp?.focus();
+  });
+  closeBtn?.addEventListener('click', () => { panel.hidden = true; });
+  sendBtn?.addEventListener('click', sendChatMessage);
+  inp?.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChatMessage(); } });
+})();
+
+// ─── AI Weekly Summary ────────────────────────────────────────────────────────
+
+async function generateWeeklySummary() {
+  const overlay  = document.getElementById('weeklySummaryOverlay');
+  const bodyEl   = document.getElementById('weeklySummaryBody');
+  if (!overlay || !bodyEl) return;
+
+  overlay.classList.add('is-open');
+  bodyEl.innerHTML = '<div class="ai-loading">Generating weekly summary…</div>';
+
+  try {
+    const context = buildBusinessContext();
+    const today   = new Date().toLocaleDateString('en-AU', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+
+    const prompt = `Today is ${today}. Based on the following business data, write a plain-English weekly business summary for Dynasty Bricklaying. Include: overall performance, key sites, revenue/cash position, any risks or problems, and 3 recommended actions for next week. Use clear headings and bullet points.\n\nBusiness data:\n${context}`;
+
+    const reply = await callClaudeAPI(
+      [{ role: 'user', content: prompt }],
+      'You are Dynasty AI, a business analyst assistant for Dynasty Bricklaying, an Australian bricklaying and pressure cleaning business. Write professional, clear business summaries in plain Australian English.'
+    );
+
+    bodyEl.innerHTML = `<div class="ai-summary-text">${escHtml(reply).replace(/\n/g, '<br>').replace(/#{1,3} (.+?)(<br>|$)/g, '<strong>$1</strong>$2')}</div>`;
+
+    document.getElementById('btnCopySummary')?.addEventListener('click', () => {
+      navigator.clipboard.writeText(reply).then(
+        () => showToast('Summary copied!', 'success'),
+        () => showToast('Copy failed', 'error')
+      );
+    }, { once: true });
+
+  } catch (err) {
+    bodyEl.innerHTML = `<p class="ai-error">⚠ ${escHtml(err.message)}</p>`;
+  }
+}
+
+(function initWeeklySummary() {
+  const btn      = document.getElementById('btnWeeklySummary');
+  const overlay  = document.getElementById('weeklySummaryOverlay');
+  const closeBtn = document.getElementById('weeklySummaryClose');
+  if (!btn || !overlay) return;
+
+  btn.addEventListener('click', generateWeeklySummary);
+  closeBtn?.addEventListener('click', () => overlay.classList.remove('is-open'));
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.classList.remove('is-open'); });
+})();
+
+
+
 
 // ─── Start ────────────────────────────────────────────────────────────────────
 _initModalOverlayClick();

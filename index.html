@@ -112,6 +112,8 @@
           <button class="biz-toggle-btn" data-biz="pressure">Pressure Cleaning</button>
         </div>
         <span class="last-updated" id="lastUpdated">Last updated: —</span>
+        <button class="btn-header-action" id="btnWeeklySummary" title="AI Weekly Summary">&#128200; Summary</button>
+        <button class="btn-header-action" id="btnCalculate" title="Materials Calculator">&#129523; Calculate</button>
         <button class="btn-settings" id="btnSettings" title="Settings">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
         </button>
@@ -478,9 +480,46 @@
         <div class="sm8-section-label">Top Clients <span class="sm8-section-fy" id="financeTopClientsLabel"></span></div>
         <div id="financeTopClients"></div>
 
+        <!-- Client Health Score -->
+        <div class="sm8-section-label">Client Health Scores</div>
+        <div id="financeClientHealth"></div>
+
+        <!-- Cash Flow Forecast -->
+        <div class="sm8-section-label">Cash Flow Forecast</div>
+        <div id="financeCashFlow"></div>
+
+        <!-- Brick Price Tracker -->
+        <div class="sm8-section-label">Material Price Watch</div>
+        <div id="financeBrickPrices"></div>
+
       </section>
 
     </div><!-- /#viewFinance -->
+
+
+    <!-- ======================================================
+         RISK REPORT VIEW
+         ====================================================== -->
+    <div id="viewRisk" hidden>
+      <section class="jobs-section">
+        <div class="sm8-section-label">Predictive Delay Engine — Risk Report</div>
+        <div id="riskReportContent"></div>
+      </section>
+    </div><!-- /#viewRisk -->
+
+
+    <!-- ======================================================
+         SUBBIES VIEW
+         ====================================================== -->
+    <div id="viewSubbies" hidden>
+      <section class="jobs-section">
+        <div class="subbies-header-row">
+          <div class="sm8-section-label" style="margin:0">Subcontractor Tracker</div>
+          <button class="btn-add-subbie" id="btnAddSubbie">&#43; Add Subbie</button>
+        </div>
+        <div id="subbiesContent"></div>
+      </section>
+    </div><!-- /#viewSubbies -->
 
   </main>
 
@@ -513,10 +552,11 @@
   <div id="settingsOverlay" class="settings-overlay" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
     <div class="settings-modal">
       <div class="settings-header">
-        <span class="settings-title" id="settingsTitle">&#9881; Settings — Change PIN</span>
+        <span class="settings-title" id="settingsTitle">&#9881; Settings</span>
         <button class="btn-modal-close" id="settingsClose" aria-label="Close settings">&#10005;</button>
       </div>
       <div class="settings-body">
+        <div class="settings-section-title">Change PIN</div>
         <div>
           <label class="settings-label" for="settingsCurrent">Current PIN</label>
           <input id="settingsCurrent" class="settings-input" type="password" inputmode="numeric"
@@ -534,12 +574,135 @@
         </div>
         <button class="settings-save-btn" id="settingsSave">Save PIN</button>
         <p class="settings-msg" id="settingsMsg"></p>
+        <div class="settings-divider"></div>
+        <div class="settings-section-title">AI Integration</div>
+        <div>
+          <label class="settings-label" for="settingsAnthropicKey">Anthropic API Key <span class="settings-hint">(stored locally, never sent to any server)</span></label>
+          <input id="settingsAnthropicKey" class="settings-input settings-input--wide" type="password"
+                 placeholder="sk-ant-…" autocomplete="off" />
+        </div>
+        <button class="settings-save-btn settings-save-btn--secondary" id="settingsSaveKey">Save API Key</button>
+        <p class="settings-msg" id="settingsKeyMsg"></p>
+        <div class="settings-divider"></div>
+        <div class="settings-section-title">Builder Portal</div>
+        <div class="settings-info-row">
+          <span class="settings-info-text">Share with builders: PIN <strong>7777</strong></span>
+          <button class="settings-save-btn settings-save-btn--secondary" id="btnShareBuilder">&#128203; Copy Share Link</button>
+        </div>
       </div>
     </div>
   </div>
 
-  <!-- Client Portal Watermark (shown only in portal mode) -->
+  <!-- Client Portal Watermark (shown only in portal/builder mode) -->
   <div id="portalWatermark" class="portal-watermark" hidden>Client View</div>
+  <div id="builderWatermark" class="portal-watermark portal-watermark--builder" hidden>Builder View</div>
+
+  <!-- ======================================================
+       AI WEEKLY SUMMARY MODAL
+       ====================================================== -->
+  <div id="weeklySummaryOverlay" class="ai-modal-overlay" role="dialog" aria-modal="true">
+    <div class="ai-modal">
+      <div class="ai-modal-header">
+        <span class="ai-modal-title">&#128200; AI Weekly Business Summary</span>
+        <div class="ai-modal-actions">
+          <button class="btn-ai-copy" id="btnCopySummary" title="Copy to clipboard">&#128203; Copy</button>
+          <button class="btn-modal-close" id="weeklySummaryClose" aria-label="Close">&#10005;</button>
+        </div>
+      </div>
+      <div class="ai-modal-body" id="weeklySummaryBody">
+        <div class="ai-loading">Generating summary…</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======================================================
+       MATERIALS CALCULATOR MODAL
+       ====================================================== -->
+  <div id="calcOverlay" class="ai-modal-overlay" role="dialog" aria-modal="true">
+    <div class="ai-modal ai-modal--wide">
+      <div class="ai-modal-header">
+        <span class="ai-modal-title">&#129523; Materials Calculator</span>
+        <button class="btn-modal-close" id="calcClose" aria-label="Close">&#10005;</button>
+      </div>
+      <div class="ai-modal-body">
+        <div class="calc-grid">
+          <div class="calc-col">
+            <h3 class="calc-section-title">Wall Dimensions</h3>
+            <div class="calc-field">
+              <label class="calc-label">Wall Length (m)</label>
+              <input type="number" id="calcLength" class="calc-input" value="10" min="0" step="0.1" />
+            </div>
+            <div class="calc-field">
+              <label class="calc-label">Wall Height (m)</label>
+              <input type="number" id="calcHeight" class="calc-input" value="2.4" min="0" step="0.1" />
+            </div>
+            <div class="calc-field">
+              <label class="calc-label">Wall Thickness</label>
+              <select id="calcThickness" class="calc-input">
+                <option value="single">Single Skin (110mm)</option>
+                <option value="double" selected>Double Skin (230mm)</option>
+                <option value="block">Block (190mm)</option>
+              </select>
+            </div>
+            <div class="calc-field">
+              <label class="calc-label">Brick Type</label>
+              <select id="calcBrickType" class="calc-input">
+                <option value="standard">Standard Brick (230×76×110)</option>
+                <option value="block">Concrete Block (390×190×190)</option>
+                <option value="jumbo">Jumbo Brick (290×90×90)</option>
+              </select>
+            </div>
+            <div class="calc-field">
+              <label class="calc-label">Bond Pattern</label>
+              <select id="calcBond" class="calc-input">
+                <option value="stretcher">Stretcher Bond</option>
+                <option value="flemish">Flemish Bond</option>
+                <option value="english">English Bond</option>
+              </select>
+            </div>
+            <div class="calc-field">
+              <label class="calc-label">Mortar Joint (mm)</label>
+              <input type="number" id="calcJoint" class="calc-input" value="10" min="5" max="15" step="1" />
+            </div>
+            <div class="calc-field">
+              <label class="calc-label">Openings (doors/windows) Area (m²)</label>
+              <input type="number" id="calcOpenings" class="calc-input" value="0" min="0" step="0.1" />
+            </div>
+            <button class="calc-run-btn" id="btnRunCalc">&#9654; Calculate</button>
+          </div>
+          <div class="calc-col">
+            <h3 class="calc-section-title">Results</h3>
+            <div id="calcResults" class="calc-results">
+              <p class="calc-hint">Fill in dimensions and click Calculate.</p>
+            </div>
+            <button class="calc-copy-btn" id="btnCopyCalc" hidden>&#128203; Copy Quote</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======================================================
+       AI CHAT BUBBLE + PANEL
+       ====================================================== -->
+  <button class="ai-chat-bubble" id="aiChatBubble" title="AI Assistant">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="22" height="22"><path d="M12 2C6.48 2 2 6.48 2 12c0 1.85.5 3.58 1.37 5.06L2 22l4.94-1.37A9.95 9.95 0 0 0 12 22c5.52 0 10-4.48 10-10S17.52 2 12 2zm1 14H7v-2h6v2zm4-4H7v-2h10v2zm0-4H7V6h10v2z"/></svg>
+  </button>
+  <div class="ai-chat-panel" id="aiChatPanel" hidden>
+    <div class="ai-chat-header">
+      <span class="ai-chat-title">&#129504; Dynasty AI</span>
+      <button class="btn-modal-close" id="aiChatClose" aria-label="Close chat">&#10005;</button>
+    </div>
+    <div class="ai-chat-messages" id="aiChatMessages">
+      <div class="ai-chat-msg ai-chat-msg--ai">
+        <div class="ai-chat-msg-text">G'day! I'm your Dynasty business assistant. Ask me anything about your jobs, revenue, crew, or site progress.</div>
+      </div>
+    </div>
+    <div class="ai-chat-input-row">
+      <input type="text" id="aiChatInput" class="ai-chat-input" placeholder="Ask something…" autocomplete="off" />
+      <button class="ai-chat-send" id="aiChatSend">&#10148;</button>
+    </div>
+  </div>
 
   </div><!-- /#dashboardRoot -->
 
