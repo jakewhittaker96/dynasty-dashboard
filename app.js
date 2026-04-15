@@ -3404,7 +3404,7 @@ function buildBusinessContext() {
   return parts.join('\n');
 }
 
-const AI_PROXY_URL = 'http://localhost:3001/api/chat';
+const AI_PROXY_URL = '/api/chat';
 
 async function callClaudeAPI(messages, systemPrompt) {
   let res;
@@ -3415,12 +3415,12 @@ async function callClaudeAPI(messages, systemPrompt) {
       body:    JSON.stringify({ messages, system: systemPrompt }),
     });
   } catch (networkErr) {
-    throw new Error('AI proxy not running — double-click start.bat first, then try again.');
+    throw new Error('Could not reach AI endpoint — check your connection or Netlify deployment.');
   }
 
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    throw new Error(data.error || `Proxy error ${res.status}`);
+    throw new Error(data.error || `AI error ${res.status}`);
   }
   return data.text || '(No response)';
 }
