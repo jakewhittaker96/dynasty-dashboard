@@ -2605,25 +2605,27 @@ body.modal-open { overflow: hidden; }
 .ai-modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0,0,0,0.65);
-  z-index: 900;
+  background: rgba(0,0,0,0.85);
+  z-index: 10000;
   display: none;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
-  padding: 1rem;
+  padding: 1.5rem 1rem;
+  overflow-y: auto;
 }
 .ai-modal-overlay.is-open { display: flex; }
 
 .ai-modal {
-  background: var(--card-bg);
-  border: 1px solid var(--border);
+  background: #0a0a0a;
+  border: 1px solid rgba(201,168,76,0.4);
   border-radius: 12px;
   width: 100%;
   max-width: 560px;
-  max-height: 90vh;
+  max-height: none;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 24px 60px rgba(0,0,0,0.5);
+  box-shadow: 0 24px 80px rgba(0,0,0,0.9);
+  margin: auto;
 }
 .ai-modal--wide { max-width: 780px; }
 
