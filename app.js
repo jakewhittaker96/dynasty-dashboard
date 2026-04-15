@@ -1410,25 +1410,41 @@ function openSiteModal(siteName) {
   const daysLeftAdj = (latest.daysLeft || 0) + (isWeather ? 1 : 0);
   const allProblems = rows.filter(r => r.problems && r.problems.trim());
 
-  // Build the photo URL — convert Google Drive share link to embeddable thumbnail if needed
-  const rawPhoto = latest.photoUrl || '';
-  let photoHtml  = '';
-  if (rawPhoto) {
-    // Drive share links: https://drive.google.com/file/d/FILE_ID/view?...
-    const driveMatch = rawPhoto.match(/\/file\/d\/([^/]+)/);
-    const imgSrc = driveMatch
-      ? `https://drive.google.com/thumbnail?id=${driveMatch[1]}&sz=w800`
-      : rawPhoto;
+  // ── Photo gallery — all rows with a photoUrl, newest first ─────────────────
+  const photoRows = [...rows].reverse().filter(r => r.photoUrl && r.photoUrl.trim());
+  let photoHtml = '';
+  if (photoRows.length) {
+    const thumbs = photoRows.map(r => {
+      const raw = r.photoUrl.trim();
+      const m   = raw.match(/\/file\/d\/([^/]+)/);
+      const src = m ? `https://drive.google.com/thumbnail?id=${m[1]}&sz=w400` : raw;
+      const dateLabel = r.date ? formatDateShort(r.date) : '';
+      return `
+        <div class="photo-gallery-item">
+          <a href="${escHtml(raw)}" target="_blank" rel="noopener" class="photo-gallery-link">
+            <img src="${escHtml(src)}" alt="Progress photo ${escHtml(dateLabel)}"
+                 class="photo-gallery-thumb" loading="lazy"
+                 onerror="this.closest('.photo-gallery-item').innerHTML='<span class=photo-gallery-err>Unavailable</span>'" />
+          </a>
+          <div class="photo-gallery-date">${escHtml(dateLabel)}</div>
+        </div>`;
+    }).join('');
     photoHtml = `
-      <h3 class="modal-section-title">&#128247; Today's Progress Photo</h3>
-      <div class="modal-photo-wrap">
-        <a href="${escHtml(rawPhoto)}" target="_blank" rel="noopener" class="modal-photo-link">
-          <img src="${escHtml(imgSrc)}" alt="Progress photo" class="modal-photo-thumb"
-               onerror="this.closest('.modal-photo-wrap').innerHTML='<p class=modal-photo-err>Photo unavailable — <a href=\\'${escHtml(rawPhoto)}\\' target=\\'_blank\\'>open link</a></p>'" />
-          <span class="modal-photo-hint">Click to open full size &#8599;</span>
-        </a>
-      </div>`;
+      <h3 class="modal-section-title">&#128247; Progress Photos <span class="modal-section-count">${photoRows.length}</span></h3>
+      <div class="photo-gallery-scroll">${thumbs}</div>`;
+  } else {
+    photoHtml = `
+      <h3 class="modal-section-title">&#128247; Progress Photos</h3>
+      <p class="photo-gallery-empty">No photos submitted yet.</p>`;
   }
+
+  // ── Weather forecast placeholder — populated async after render ──────────────
+  const weatherForecastHtml = `
+    <h3 class="modal-section-title" id="weatherForecastTitle_${escHtml(siteName)}">&#9925; 7-Day Forecast</h3>
+    <div class="weather-forecast-strip" id="weatherForecast_${escHtml(siteName)}">
+      <span class="weather-loading">Loading forecast…</span>
+    </div>
+    <div id="weatherRainNote_${escHtml(siteName)}"></div>`;
 
   bodyEl.innerHTML = `
     <div class="modal-kpi-row">
@@ -1460,6 +1476,8 @@ function openSiteModal(siteName) {
         <div class="modal-kpi-label">Weather day${weatherDays !== 1 ? 's' : ''}</div>
       </div>` : ''}
     </div>
+
+    ${weatherForecastHtml}
 
     ${photoHtml}
 
@@ -1510,10 +1528,46 @@ function openSiteModal(siteName) {
   `;
 
   // ── Show modal ───────────────────────────────────────────────────────────
-  // Scroll body back to top in case it was scrolled from a previous open
   bodyEl.scrollTop = 0;
   modal.classList.add('is-open');
   document.body.classList.add('modal-open');
+
+  // ── Async weather forecast population ───────────────────────────────────
+  fetchSiteWeather(siteName).then(weather => {
+    const forecastEl = document.getElementById(`weatherForecast_${siteName}`);
+    const rainNoteEl = document.getElementById(`weatherRainNote_${siteName}`);
+    if (!forecastEl) return;
+    if (!weather) {
+      forecastEl.innerHTML = '<span class="weather-loading">Forecast unavailable</span>';
+      return;
+    }
+    forecastEl.innerHTML = weather.days.map(d => {
+      const dayName = new Date(d.date + 'T00:00:00').toLocaleDateString('en-AU', { weekday: 'short' });
+      const rainCls = d.rainProb > 60 ? 'weather-day--rainy' : d.rainProb > 30 ? 'weather-day--cloudy' : '';
+      return `
+        <div class="weather-day ${rainCls}">
+          <div class="weather-day-name">${escHtml(dayName)}</div>
+          <div class="weather-day-icon">${weatherCodeIcon(d.code)}</div>
+          <div class="weather-day-temp">${Math.round(d.maxTemp)}°</div>
+          <div class="weather-day-rain">${Math.round(d.rainProb)}%</div>
+        </div>`;
+    }).join('');
+
+    if (rainNoteEl && weather.rain3day) {
+      // Count days >60% in next 3
+      const rainDays = weather.days.slice(0, 3).filter(d => d.rainProb > 60).length;
+      rainNoteEl.innerHTML = `
+        <div class="weather-rain-note">
+          &#9888; <strong>Rain Risk</strong> — ${rainDays} high-rain day${rainDays !== 1 ? 's' : ''} forecast in next 3 days.
+          Estimated finish extended by ${rainDays} day${rainDays !== 1 ? 's' : ''} due to forecast rain.
+        </div>`;
+      // Also update the header badge to show rain risk
+      if (badgeEl && !isWeather0) {
+        badgeEl.className = 'site-card-badge site-card-badge--weather';
+        badgeEl.innerHTML = '&#9925; Rain Risk';
+      }
+    }
+  });
 
   // ── Wire buttons (assigned fresh each open so siteName closure is current) ─
   closeBtn.onclick = () => {
@@ -1894,6 +1948,7 @@ function renderFinanceTabContent() {
   renderClientHealth(bizJobs);
   renderCashFlowForecast(bizJobs);
   renderBrickPriceTracker();
+  renderProfitIntelligence(bizJobs);
   renderPayrollCalculator(bizJobs);
 }
 
@@ -2685,14 +2740,24 @@ setInterval(loadSheet, 5 * 60 * 1000);
 // FEATURE 2 — LIVE WEATHER PER SITE
 // ═══════════════════════════════════════════════════════════════════════════════
 
+// Goulburn NSW fallback coordinates (central to most Dynasty sites)
+const GOULBURN_COORDS = { lat: -34.7540, lon: 149.7183 };
+
 async function geocodeSite(address) {
-  const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address + ', Australia')}&limit=1`;
+  const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address + ', NSW, Australia')}&limit=1`;
   try {
     const res  = await fetch(url, { headers: { 'User-Agent': 'DynastyDashboard/1.0' } });
+    if (!res.ok) throw new Error(`Nominatim ${res.status}`);
     const data = await res.json();
-    if (data && data[0]) return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) };
-  } catch { /* silent */ }
-  return null;
+    if (data && data[0]) {
+      console.log(`[Dynasty] Geocoded "${address}" → lat=${data[0].lat} lon=${data[0].lon}`);
+      return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) };
+    }
+    console.warn(`[Dynasty] Nominatim: no results for "${address}" — using Goulburn fallback`);
+  } catch (err) {
+    console.warn(`[Dynasty] Nominatim error for "${address}": ${err.message} — using Goulburn fallback`);
+  }
+  return GOULBURN_COORDS;
 }
 
 async function fetchSiteWeather(siteName) {
@@ -2742,16 +2807,28 @@ async function loadWeatherForAllSites(bySite) {
   for (const [siteName] of bySite) {
     fetchSiteWeather(siteName).then(weather => {
       if (!weather) return;
-      // Inject weather onto the card if it exists
-      const cards = document.querySelectorAll('[data-site-weather]');
-      cards.forEach(el => {
-        if (el.dataset.siteWeather === siteName) {
-          const today = weather.days[0];
-          el.textContent = `${weatherCodeIcon(today.code)} ${Math.round(today.maxTemp)}°C`;
-          el.title = weather.rain3day ? '⚠ Rain risk in next 3 days' : '';
-          el.classList.toggle('site-weather--rain-risk', weather.rain3day);
-        }
+      // Update weather badge text
+      document.querySelectorAll('[data-site-weather]').forEach(el => {
+        if (el.dataset.siteWeather !== siteName) return;
+        const today = weather.days[0];
+        el.textContent = `${weatherCodeIcon(today.code)} ${Math.round(today.maxTemp)}°C`;
+        el.title = weather.rain3day ? '⚠ Rain risk in next 3 days' : '';
+        el.classList.toggle('site-weather--rain-risk', weather.rain3day);
       });
+      // Add ⚠ Rain Risk badge to the site card header if rain risk detected
+      if (weather.rain3day) {
+        document.querySelectorAll(`.site-card[data-site="${CSS.escape(siteName)}"]`).forEach(card => {
+          // Only add if no existing rain-risk badge
+          if (!card.querySelector('.site-card-badge--rain')) {
+            const rainDays = weather.days.slice(0, 3).filter(d => d.rainProb > 60).length;
+            const badge = document.createElement('span');
+            badge.className = 'site-card-badge site-card-badge--rain';
+            badge.innerHTML = `&#9925; Rain Risk`;
+            badge.title = `${rainDays} day${rainDays !== 1 ? 's' : ''} >60% rain in next 3 days`;
+            card.querySelector('.site-card-header')?.appendChild(badge);
+          }
+        });
+      }
     });
   }
 }
@@ -3700,6 +3777,167 @@ function openChaseModal(job) {
   });
 }
 
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// FEATURE: PROFIT INTELLIGENCE (Finance tab)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function renderProfitIntelligence(jobs) {
+  const el = document.getElementById('financeProfitIntel');
+  if (!el) return;
+
+  const DAILY_RATE = 800; // $/day assumed
+  const completed  = jobs.filter(j => j.status === 'Completed' && parseFloat(j.total_invoice_amount || 0) > 0);
+
+  if (!completed.length) {
+    el.innerHTML = '<p class="table-empty" style="padding:1rem 0">No completed jobs with invoices yet.</p>';
+    return;
+  }
+
+  // ── Helper: ranked list HTML ────────────────────────────────────────────────
+  function rankedList(rows, title, icon) {
+    if (!rows.length) return '';
+    return `
+      <div class="pi-section">
+        <div class="pi-section-title">${icon} ${escHtml(title)}</div>
+        <div class="pi-list">
+          ${rows.map((r, i) => `
+            <div class="pi-row ${i === 0 ? 'pi-row--gold' : ''}">
+              <span class="pi-rank">${i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `#${i + 1}`}</span>
+              <span class="pi-label">${escHtml(r.label)}</span>
+              <span class="pi-meta">${escHtml(r.meta)}</span>
+              <span class="pi-value">${escHtml(r.value)}</span>
+            </div>`).join('')}
+        </div>
+      </div>`;
+  }
+
+  // 1. Top 10 most profitable clients (avg invoice value per job)
+  const clientMap = new Map();
+  for (const j of completed) {
+    const client = sm8CompanyMap.get(j.company_uuid || '') || 'Unknown';
+    const amt    = parseFloat(j.total_invoice_amount || 0);
+    if (!clientMap.has(client)) clientMap.set(client, { total: 0, count: 0 });
+    const e = clientMap.get(client);
+    e.total += amt; e.count++;
+  }
+  const topClients = [...clientMap.entries()]
+    .map(([label, { total, count }]) => ({
+      label,
+      meta:  `${count} job${count !== 1 ? 's' : ''}`,
+      value: fmtCurrency(total / count) + ' avg',
+      avg:   total / count,
+    }))
+    .sort((a, b) => b.avg - a.avg)
+    .slice(0, 10);
+
+  // 2. Most profitable job types (keyword groups)
+  const JOB_KEYWORDS = [
+    { key: 'brick veneer',   pat: /brick veneer/i },
+    { key: 'double brick',   pat: /double brick/i },
+    { key: 'footing',        pat: /footing|footings/i },
+    { key: 'fence',          pat: /fence|fencing/i },
+    { key: 'pressure clean', pat: /pressure clean|high pressure/i },
+    { key: 'block work',     pat: /block work|blockwork|besser/i },
+    { key: 'retaining wall', pat: /retaining wall/i },
+    { key: 'extension',      pat: /extension|addition/i },
+    { key: 'new home',       pat: /new home|new house|new build/i },
+    { key: 'repair',         pat: /repair|repoint|tuckpoint/i },
+  ];
+  const typeMap = new Map();
+  for (const j of completed) {
+    const desc = (j.job_description || '').toLowerCase();
+    const amt  = parseFloat(j.total_invoice_amount || 0);
+    let matched = false;
+    for (const { key, pat } of JOB_KEYWORDS) {
+      if (pat.test(desc)) {
+        if (!typeMap.has(key)) typeMap.set(key, { total: 0, count: 0 });
+        const e = typeMap.get(key); e.total += amt; e.count++;
+        matched = true; break;
+      }
+    }
+    if (!matched) {
+      const k = 'Other';
+      if (!typeMap.has(k)) typeMap.set(k, { total: 0, count: 0 });
+      const e = typeMap.get(k); e.total += amt; e.count++;
+    }
+  }
+  const topTypes = [...typeMap.entries()]
+    .map(([label, { total, count }]) => ({
+      label: label.replace(/\b\w/g, c => c.toUpperCase()),
+      meta:  `${count} job${count !== 1 ? 's' : ''}`,
+      value: fmtCurrency(total / count) + ' avg',
+      avg:   total / count,
+    }))
+    .sort((a, b) => b.avg - a.avg)
+    .slice(0, 8);
+
+  // 3. Most profitable suburbs
+  function extractSuburb(address) {
+    if (!address) return null;
+    // "123 Main St, Goulburn NSW 2580" → "Goulburn"
+    const parts = address.split(',');
+    for (let i = parts.length - 1; i >= 0; i--) {
+      const part = parts[i].trim();
+      // Strip postcode/state
+      const m = part.replace(/\b\d{4}\b/, '').replace(/\b(NSW|VIC|QLD|SA|WA|ACT|TAS|NT)\b/i, '').trim();
+      if (m.length > 2) return m.replace(/\b\w/g, c => c.toUpperCase());
+    }
+    return null;
+  }
+  const suburbMap = new Map();
+  for (const j of completed) {
+    const suburb = extractSuburb(j.job_address || '');
+    if (!suburb) continue;
+    const amt = parseFloat(j.total_invoice_amount || 0);
+    if (!suburbMap.has(suburb)) suburbMap.set(suburb, { total: 0, count: 0 });
+    const e = suburbMap.get(suburb); e.total += amt; e.count++;
+  }
+  const topSuburbs = [...suburbMap.entries()]
+    .map(([label, { total, count }]) => ({
+      label,
+      meta:  `${count} job${count !== 1 ? 's' : ''}`,
+      value: fmtCurrency(total / count) + ' avg',
+      avg:   total / count,
+    }))
+    .sort((a, b) => b.avg - a.avg)
+    .slice(0, 8);
+
+  // 4. Best performing months (total revenue)
+  const monthMap = new Map();
+  for (const j of completed) {
+    const d = new Date((j.date || '').substring(0, 10) + 'T00:00:00');
+    if (isNaN(d)) continue;
+    const key = d.toLocaleDateString('en-AU', { month: 'long', year: 'numeric' });
+    const amt = parseFloat(j.total_invoice_amount || 0);
+    if (!monthMap.has(key)) monthMap.set(key, 0);
+    monthMap.set(key, monthMap.get(key) + amt);
+  }
+  const topMonths = [...monthMap.entries()]
+    .map(([label, total]) => ({ label, meta: '', value: fmtCurrency(total), total }))
+    .sort((a, b) => b.total - a.total)
+    .slice(0, 6);
+
+  // 5. Revenue per day on site
+  const revPerDay = completed
+    .map(j => {
+      const amt  = parseFloat(j.total_invoice_amount || 0);
+      const days = Math.max(1, Math.round(amt / DAILY_RATE));
+      return { label: (j.job_description || 'Unnamed').split('\n')[0].slice(0, 45),
+               meta: `~${days} days est.`, value: fmtCurrency(amt / days) + '/day', rpd: amt / days };
+    })
+    .sort((a, b) => b.rpd - a.rpd)
+    .slice(0, 8);
+
+  el.innerHTML = `
+    <div class="pi-wrap">
+      ${rankedList(topClients, 'Top Clients by Avg Invoice',    '&#128101;')}
+      ${rankedList(topTypes,   'Most Profitable Job Types',     '&#127959;')}
+      ${rankedList(topSuburbs, 'Most Profitable Suburbs',       '&#128205;')}
+      ${rankedList(topMonths,  'Best Revenue Months',           '&#128197;')}
+      ${rankedList(revPerDay,  'Best Revenue per Day on Site',  '&#9200;')}
+    </div>`;
+}
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // FEATURE: WAGE & SUPER CALCULATOR (Finance tab — Payroll Estimator)

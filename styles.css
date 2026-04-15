@@ -250,6 +250,7 @@ body {
 .site-card-badge--ok      { background: var(--green-bg); color: var(--green); }
 .site-card-badge--behind  { background: rgba(230,160,30,0.15); color: #e6a01e; }
 .site-card-badge--weather { background: rgba(96,165,250,0.12); color: #60a5fa; }
+.site-card-badge--rain    { background: rgba(96,165,250,0.12); color: #60a5fa; }
 
 .site-card-progress { margin-bottom: 0.9rem; }
 
@@ -2782,8 +2783,10 @@ textarea.calc-input { resize: vertical; font-family: inherit; }
   display: flex;
   align-items: center;
   justify-content: center;
+  font-size: 1.4rem;
+  line-height: 1;
   box-shadow: 0 4px 20px rgba(201,168,76,0.35);
-  z-index: 850;
+  z-index: 9000;
   transition: transform 0.15s, box-shadow 0.15s;
 }
 .ai-chat-bubble:hover {
@@ -2792,20 +2795,22 @@ textarea.calc-input { resize: vertical; font-family: inherit; }
 }
 .ai-chat-panel {
   position: fixed;
-  bottom: 4.5rem;
+  bottom: 5.5rem;
   right: 1.5rem;
   width: 340px;
-  max-height: 480px;
-  background: var(--card-bg);
+  max-height: 500px;
+  background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 12px;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 16px 40px rgba(0,0,0,0.45);
-  z-index: 849;
+  box-shadow: 0 16px 48px rgba(0,0,0,0.7);
+  z-index: 8999;
+  /* Never participate in document layout — purely overlay */
+  pointer-events: auto;
 }
 @media (max-width: 480px) {
-  .ai-chat-panel { width: calc(100vw - 2rem); right: 1rem; }
+  .ai-chat-panel { width: calc(100vw - 2rem); right: 1rem; bottom: 5rem; }
   .ai-chat-bubble { right: 1rem; bottom: 1rem; }
 }
 .ai-chat-header {
@@ -3673,5 +3678,132 @@ textarea.calc-input { resize: vertical; font-family: inherit; }
   cursor: pointer;
   white-space: nowrap;
 }
+
+/* =============================================
+   WEATHER FORECAST STRIP (site modal)
+   ============================================= */
+.weather-forecast-strip {
+  display: flex;
+  gap: 0.4rem;
+  overflow-x: auto;
+  padding: 0.5rem 0 0.8rem;
+  scrollbar-width: thin;
+}
+.weather-loading {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  font-style: italic;
+  padding: 0.4rem 0;
+}
+.weather-day {
+  flex-shrink: 0;
+  width: 62px;
+  background: var(--surface-2);
+  border: 1px solid var(--border-dim);
+  border-radius: var(--radius-sm);
+  padding: 0.5rem 0.3rem;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+.weather-day--rainy  { border-color: rgba(96,165,250,0.4); background: rgba(96,165,250,0.06); }
+.weather-day--cloudy { border-color: rgba(96,165,250,0.2); }
+.weather-day-name  { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); }
+.weather-day-icon  { font-size: 1.2rem; line-height: 1.2; }
+.weather-day-temp  { font-size: 0.8rem; font-weight: 700; color: var(--text); }
+.weather-day-rain  { font-size: 0.7rem; color: #60a5fa; }
+
+.weather-rain-note {
+  background: rgba(96,165,250,0.08);
+  border: 1px solid rgba(96,165,250,0.25);
+  border-radius: var(--radius-sm);
+  padding: 0.55rem 0.8rem;
+  font-size: 0.82rem;
+  color: #93c5fd;
+  margin-bottom: 1rem;
+}
+
+/* =============================================
+   PHOTO GALLERY (site modal)
+   ============================================= */
+.photo-gallery-scroll {
+  display: flex;
+  gap: 0.75rem;
+  overflow-x: auto;
+  padding: 0.25rem 0 1rem;
+  scrollbar-width: thin;
+  margin-bottom: 0.5rem;
+}
+.photo-gallery-item {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.3rem;
+}
+.photo-gallery-link { display: block; border-radius: var(--radius-sm); overflow: hidden; }
+.photo-gallery-thumb {
+  width: 120px;
+  height: 90px;
+  object-fit: cover;
+  display: block;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-dim);
+  transition: opacity 0.15s;
+}
+.photo-gallery-thumb:hover { opacity: 0.85; }
+.photo-gallery-date {
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  text-align: center;
+}
+.photo-gallery-err { font-size: 0.72rem; color: var(--text-muted); padding: 0.3rem; }
+.photo-gallery-empty {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  font-style: italic;
+  padding: 0.3rem 0 1rem;
+}
+
+/* =============================================
+   PROFIT INTELLIGENCE (Finance tab)
+   ============================================= */
+.pi-wrap {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 1rem;
+  margin-top: 0.5rem;
+}
+.pi-section {
+  background: var(--surface-2);
+  border: 1px solid var(--border-dim);
+  border-radius: var(--radius);
+  padding: 1rem 1.1rem;
+}
+.pi-section-title {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-muted);
+  margin-bottom: 0.7rem;
+}
+.pi-list { display: flex; flex-direction: column; gap: 0.35rem; }
+.pi-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.82rem;
+  padding: 0.3rem 0.4rem;
+  border-radius: var(--radius-sm);
+}
+.pi-row--gold {
+  background: rgba(201,168,76,0.1);
+  border: 1px solid rgba(201,168,76,0.2);
+}
+.pi-rank  { width: 1.6rem; text-align: center; flex-shrink: 0; font-size: 0.8rem; }
+.pi-label { flex: 1; color: var(--text); font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pi-meta  { font-size: 0.72rem; color: var(--text-muted); flex-shrink: 0; }
+.pi-value { font-weight: 700; color: var(--gold); flex-shrink: 0; white-space: nowrap; }
 
 

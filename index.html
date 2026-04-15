@@ -494,6 +494,10 @@
         <div class="sm8-section-label">Material Price Watch</div>
         <div id="financeBrickPrices"></div>
 
+        <!-- Profit Intelligence -->
+        <div class="sm8-section-label">&#128176; Profit Intelligence</div>
+        <div id="financeProfitIntel"></div>
+
         <!-- Payroll Estimator -->
         <div class="sm8-section-label">Payroll Estimator</div>
         <div id="financePayroll"></div>
@@ -701,11 +705,13 @@
     </div>
   </div>
 
+  </div><!-- /#dashboardRoot -->
+
   <!-- ======================================================
-       AI CHAT BUBBLE + PANEL
+       AI CHAT BUBBLE + PANEL  (fixed overlay, outside dashboardRoot)
        ====================================================== -->
   <button class="ai-chat-bubble" id="aiChatBubble" title="AI Assistant">
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="22" height="22"><path d="M12 2C6.48 2 2 6.48 2 12c0 1.85.5 3.58 1.37 5.06L2 22l4.94-1.37A9.95 9.95 0 0 0 12 22c5.52 0 10-4.48 10-10S17.52 2 12 2zm1 14H7v-2h6v2zm4-4H7v-2h10v2zm0-4H7V6h10v2z"/></svg>
+    🧱
   </button>
   <div class="ai-chat-panel" id="aiChatPanel" hidden>
     <div class="ai-chat-header">
@@ -722,8 +728,6 @@
       <button class="ai-chat-send" id="aiChatSend">&#10148;</button>
     </div>
   </div>
-
-  </div><!-- /#dashboardRoot -->
 
   <!-- ======================================================
        AI PLAN READER MODAL
