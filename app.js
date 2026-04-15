@@ -3646,23 +3646,32 @@ async function sendChatMessage() {
 }
 
 (function initAIChat() {
-  const bubble   = document.getElementById('aiChatBubble');
-  const panel    = document.getElementById('aiChatPanel');
-  const sendBtn  = document.getElementById('aiChatSend');
-  const inp      = document.getElementById('aiChatInput');
+  const bubble = document.getElementById('aiChatBubble');
+  const panel  = document.getElementById('aiChatPanel');
+  const sendBtn = document.getElementById('aiChatSend');
+  const inp     = document.getElementById('aiChatInput');
   if (!bubble || !panel) return;
 
+  function closePanel() { panel.hidden = true; }
+
+  // Toggle open/close on bubble click
   bubble.addEventListener('click', () => {
     panel.hidden = !panel.hidden;
     if (!panel.hidden) inp?.focus();
   });
 
-  // Use onclick on the element directly — more reliable than addEventListener
-  // when the panel lives outside #dashboardRoot
-  const closeBtn = document.getElementById('aiChatClose');
-  if (closeBtn) {
-    closeBtn.onclick = () => { panel.hidden = true; };
-  }
+  // Event delegation on document — catches close button regardless of when/how it renders
+  document.addEventListener('click', e => {
+    // Close button clicked
+    if (e.target.closest('#aiChatClose')) {
+      closePanel();
+      return;
+    }
+    // Click outside the panel (and not on the bubble) closes it
+    if (!panel.hidden && !panel.contains(e.target) && !bubble.contains(e.target)) {
+      closePanel();
+    }
+  });
 
   sendBtn?.addEventListener('click', sendChatMessage);
   inp?.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChatMessage(); } });
