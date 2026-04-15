@@ -192,6 +192,7 @@ const dom = {
   viewRisk:        $('viewRisk'),
   viewSubbies:     $('viewSubbies'),
   viewSafety:      $('viewSafety'),
+  viewSchedule:    $('viewSchedule'),
   // Jobs tab
   jobsRevenue:     $('jobsRevenue'),
   jobsSearch:      $('jobsSearch'),
@@ -494,6 +495,7 @@ function buildTabs(bySite) {
     makeTab('__risk__',     'Risk Report', null);
     makeTab('__subbies__',  'Subbies',  null);
     makeTab('__safety__',   'Safety',   null);
+    makeTab('__schedule__', 'Schedule', null);
   }
 
   // Hide biz toggle in portal/builder mode
@@ -555,9 +557,10 @@ function switchTab(siteKey) {
     dom.viewJobs.hidden     = id !== 'jobs';
     dom.viewPipeline.hidden = id !== 'pipeline';
     dom.viewFinance.hidden  = id !== 'finance';
-    if (dom.viewRisk)    dom.viewRisk.hidden    = id !== 'risk';
-    if (dom.viewSubbies) dom.viewSubbies.hidden = id !== 'subbies';
-    if (dom.viewSafety)  dom.viewSafety.hidden  = id !== 'safety';
+    if (dom.viewRisk)      dom.viewRisk.hidden      = id !== 'risk';
+    if (dom.viewSubbies)   dom.viewSubbies.hidden   = id !== 'subbies';
+    if (dom.viewSafety)    dom.viewSafety.hidden    = id !== 'safety';
+    if (dom.viewSchedule)  dom.viewSchedule.hidden  = id !== 'schedule';
   };
 
   if (siteKey === '__all__') {
@@ -581,6 +584,9 @@ function switchTab(siteKey) {
   } else if (siteKey === '__safety__') {
     showOnly('safety');
     renderSafetyTab();
+  } else if (siteKey === '__schedule__') {
+    showOnly('schedule');
+    renderScheduleTab();
   }
 }
 
@@ -4445,6 +4451,679 @@ function exportSafetyReport() {
   document.getElementById('btnExportSafety')?.addEventListener('click', exportSafetyReport);
 })();
 
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// FEATURE: SCHEDULE TAB
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// ── localStorage helpers ──────────────────────────────────────────────────────
+function loadSchedJobs()   { try { return JSON.parse(localStorage.getItem('dynasty-sched-jobs')   || '[]'); } catch { return []; } }
+function saveSchedJobs(a)  { localStorage.setItem('dynasty-sched-jobs',   JSON.stringify(a)); }
+function loadSchedEvents() { try { return JSON.parse(localStorage.getItem('dynasty-sched-events') || '[]'); } catch { return []; } }
+function saveSchedEvents(a){ localStorage.setItem('dynasty-sched-events', JSON.stringify(a)); }
+function loadSchedCrew()   { try { return JSON.parse(localStorage.getItem('dynasty-sched-crew')   || '[]'); } catch { return []; } }
+function saveSchedCrew(a)  { localStorage.setItem('dynasty-sched-crew',   JSON.stringify(a)); }
+function loadSchedAssign() { try { return JSON.parse(localStorage.getItem('dynasty-sched-assign') || '{}'); } catch { return {}; } }
+function saveSchedAssign(o){ localStorage.setItem('dynasty-sched-assign', JSON.stringify(o)); }
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function schedDateStr(d) {
+  // Returns YYYY-MM-DD for a Date object
+  return d.toISOString().slice(0, 10);
+}
+function schedAddDays(dateStr, n) {
+  const d = new Date(dateStr + 'T00:00:00');
+  d.setDate(d.getDate() + n);
+  return schedDateStr(d);
+}
+function schedDaysDiff(a, b) {
+  // b - a in whole days
+  return Math.round((new Date(b + 'T00:00:00') - new Date(a + 'T00:00:00')) / 86400000);
+}
+function schedFmtDate(s) {
+  if (!s) return '—';
+  const [y, m, d] = s.split('-');
+  return `${d}/${m}/${y}`;
+}
+
+const SCHED_STATUS_COLOR = {
+  'Quoted':      '#3b82f6',
+  'Confirmed':   '#D4A843',
+  'In Progress': '#52c48a',
+  'Complete':    '#6b7280',
+  'Overdue':     '#e05252',
+};
+
+function schedJobColor(job) {
+  const today = schedDateStr(new Date());
+  if (job.status === 'Complete') return SCHED_STATUS_COLOR['Complete'];
+  if (job.status !== 'Complete' && job.endDate < today) return SCHED_STATUS_COLOR['Overdue'];
+  return SCHED_STATUS_COLOR[job.status] || '#6b7280';
+}
+
+// ── Build the combined job list (SM8 + manual) ────────────────────────────────
+function buildSchedJobs() {
+  const manual = loadSchedJobs();
+  const sm8Connected = jobsLoaded && activeJobsData.length > 0;
+
+  if (!sm8Connected) return { jobs: manual, sm8: false };
+
+  // Convert SM8 jobs to schedule format (dedupe by uuid to avoid duplicates with manual)
+  const manualIds = new Set(manual.map(j => j.id));
+  const sm8Jobs = filterByBiz(activeJobsData)
+    .filter(j => j.date && ['Work Order', 'Completed', 'Quote'].includes(j.status))
+    .map(j => {
+      const startDate = (j.date || '').substring(0, 10);
+      const amt = parseFloat(j.total_invoice_amount || 0);
+      // Estimate end date: value / $800/day, minimum 1 day
+      const estDays = Math.max(1, Math.round(amt / 800));
+      const endDate = startDate ? schedAddDays(startDate, estDays) : startDate;
+      const sm8Status = j.status === 'Completed' ? 'Complete'
+        : j.status === 'Work Order' ? 'In Progress'
+        : 'Quoted';
+      return {
+        id:        'sm8_' + j.uuid,
+        name:      (j.job_description || 'Unnamed job').split('\n')[0].slice(0, 60),
+        client:    sm8CompanyMap.get(j.company_uuid || '') || '—',
+        address:   (j.job_address || '').split('\n')[0],
+        startDate,
+        endDate,
+        value:     amt,
+        status:    sm8Status,
+        sm8:       true,
+      };
+    })
+    .filter(j => j.startDate && !manualIds.has(j.id));
+
+  return { jobs: [...sm8Jobs, ...manual], sm8: true };
+}
+
+// ── Main render ───────────────────────────────────────────────────────────────
+async function renderScheduleTab() {
+  const { jobs, sm8 } = buildSchedJobs();
+  const events = loadSchedEvents();
+  const today  = schedDateStr(new Date());
+
+  // SM8 badge
+  const badge = document.getElementById('schedSM8Badge');
+  if (badge) badge.hidden = !sm8;
+
+  // Weather strip (14 days from today)
+  await renderSchedWeatherStrip();
+
+  // Gantt
+  renderSchedGantt(jobs, events, today);
+
+  // Job cards
+  renderSchedJobCards(jobs);
+}
+
+// ── Weather strip ─────────────────────────────────────────────────────────────
+async function renderSchedWeatherStrip() {
+  const el = document.getElementById('schedWeatherStrip');
+  if (!el) return;
+
+  el.innerHTML = '<div class="sched-weather-loading">Loading weather…</div>';
+
+  // Use Goulburn as default for schedule (no specific site)
+  const cached = siteWeatherCache.get('__schedule__');
+  let weather  = cached && (Date.now() - cached.fetched) < WEATHER_TTL ? cached : null;
+
+  if (!weather) {
+    try {
+      const { lat, lon } = GOULBURN_COORDS;
+      const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}` +
+        `&daily=weathercode,temperature_2m_max,precipitation_probability_max&timezone=Australia/Sydney&forecast_days=14`;
+      const res  = await fetch(url);
+      const json = await res.json();
+      const daily = json.daily;
+      if (daily) {
+        const days = daily.time.map((t, i) => ({
+          date:    t,
+          code:    daily.weathercode[i],
+          maxTemp: daily.temperature_2m_max[i],
+          rainProb:daily.precipitation_probability_max[i] || 0,
+        }));
+        weather = { fetched: Date.now(), days, rain3day: days.slice(0,3).some(d => d.rainProb > 60) };
+        siteWeatherCache.set('__schedule__', weather);
+      }
+    } catch { /* fall through */ }
+  }
+
+  if (!weather) { el.innerHTML = ''; return; }
+
+  el.innerHTML = `
+    <div class="sched-weather-row">
+      <div class="sched-weather-label">14-Day Weather</div>
+      <div class="sched-weather-days">
+        ${weather.days.map(d => {
+          const isRain = d.rainProb > 60;
+          const dayName = new Date(d.date + 'T00:00:00').toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric' });
+          return `<div class="sched-weather-day ${isRain ? 'sched-weather-day--rain' : ''}" title="${d.date}: ${Math.round(d.rainProb)}% rain">
+            <div class="swd-name">${escHtml(dayName)}</div>
+            <div class="swd-icon">${weatherCodeIcon(d.code)}</div>
+            <div class="swd-rain">${Math.round(d.rainProb)}%</div>
+            ${isRain ? '<div class="swd-risk">⚠</div>' : ''}
+          </div>`;
+        }).join('')}
+      </div>
+    </div>`;
+
+  return weather;
+}
+
+// ── Gantt chart ───────────────────────────────────────────────────────────────
+function renderSchedGantt(jobs, events, today) {
+  const el = document.getElementById('schedGantt');
+  if (!el) return;
+
+  const activeJobs = jobs.filter(j => j.startDate && j.endDate && j.status !== 'Complete');
+  const allJobs    = jobs.filter(j => j.startDate && j.endDate);
+
+  if (!allJobs.length) {
+    el.innerHTML = '<p class="sched-empty">No jobs scheduled yet. Add a job to see the Gantt chart.</p>';
+    return;
+  }
+
+  // Date range: earliest start to latest end, minimum 30 days, start from 7 days ago
+  const earliest = allJobs.reduce((m, j) => j.startDate < m ? j.startDate : m, allJobs[0].startDate);
+  const latest   = allJobs.reduce((m, j) => j.endDate   > m ? j.endDate   : m, allJobs[0].endDate);
+  const ganttStart = schedAddDays(earliest, -3);
+  const ganttEnd   = schedAddDays(latest,    3);
+  const totalDays  = Math.max(30, schedDaysDiff(ganttStart, ganttEnd));
+
+  // Weather cache for rain overlay
+  const weatherCache = siteWeatherCache.get('__schedule__');
+  const rainDays = new Set(weatherCache ? weatherCache.days.filter(d => d.rainProb > 60).map(d => d.date) : []);
+
+  // Generate day headers
+  const dayHeaders = [];
+  for (let i = 0; i < totalDays; i++) {
+    const d   = schedAddDays(ganttStart, i);
+    const dt  = new Date(d + 'T00:00:00');
+    const lbl = dt.toLocaleDateString('en-AU', { day: 'numeric', month: 'short' });
+    const isToday  = d === today;
+    const isWeekend= dt.getDay() === 0 || dt.getDay() === 6;
+    const isRain   = rainDays.has(d);
+    dayHeaders.push({ d, lbl, isToday, isWeekend, isRain });
+  }
+
+  // Events by date
+  const evtByDate = {};
+  for (const ev of events) {
+    if (!evtByDate[ev.date]) evtByDate[ev.date] = [];
+    evtByDate[ev.date].push(ev);
+  }
+
+  const EVENT_COLORS = {
+    'Delivery': '#3b82f6', 'Inspection': '#a78bfa', 'Builder Visit': '#D4A843',
+    'Council': '#f59e0b', 'Milestone': '#52c48a',
+  };
+
+  // Assignments
+  const assignments = loadSchedAssign();
+
+  function pct(dateStr) {
+    return ((schedDaysDiff(ganttStart, dateStr) / totalDays) * 100).toFixed(2);
+  }
+  function width(start, end) {
+    return ((schedDaysDiff(start, end) / totalDays) * 100).toFixed(2);
+  }
+
+  // Check rain overlap for a job
+  function jobHasRainRisk(job) {
+    for (const rd of rainDays) {
+      if (rd >= job.startDate && rd <= job.endDate) return true;
+    }
+    return false;
+  }
+
+  // Check crew conflicts
+  const conflictMap = {}; // 'crewName|date' → [jobIds]
+  for (const [key, crewList] of Object.entries(assignments)) {
+    const [jobId, date] = key.split('|');
+    for (const name of crewList) {
+      const ck = `${name}|${date}`;
+      if (!conflictMap[ck]) conflictMap[ck] = [];
+      conflictMap[ck].push(jobId);
+    }
+  }
+  const conflictDates = new Set(
+    Object.entries(conflictMap).filter(([, ids]) => ids.length > 1).map(([k]) => k.split('|')[1])
+  );
+
+  el.innerHTML = `
+    <div class="gantt-inner">
+      <!-- Day header row -->
+      <div class="gantt-header">
+        <div class="gantt-row-label"></div>
+        <div class="gantt-timeline">
+          ${dayHeaders.map(h => `
+            <div class="gantt-day-col ${h.isToday ? 'gantt-day--today' : ''} ${h.isWeekend ? 'gantt-day--weekend' : ''} ${h.isRain ? 'gantt-day--rain' : ''}"
+                 style="width:${(100/totalDays).toFixed(2)}%" title="${h.d}${h.isRain ? ' ⚠ Rain risk' : ''}">
+              <span class="gantt-day-lbl">${escHtml(h.lbl)}</span>
+              ${h.isToday ? '<span class="gantt-today-pip"></span>' : ''}
+            </div>`).join('')}
+        </div>
+      </div>
+
+      <!-- Job rows -->
+      ${allJobs.map(job => {
+        const color   = schedJobColor(job);
+        const left    = Math.max(0, parseFloat(pct(job.startDate)));
+        const w       = Math.min(100 - left, parseFloat(width(job.startDate, job.endDate)));
+        const rainRisk= jobHasRainRisk(job);
+        const jobEvts = events.filter(e => e.jobId === job.id);
+
+        return `
+          <div class="gantt-row" data-job-id="${escHtml(job.id)}">
+            <div class="gantt-row-label" title="${escHtml(job.name)}">
+              <span class="gantt-row-name">${escHtml(job.name.length > 22 ? job.name.slice(0,22)+'…' : job.name)}</span>
+              <span class="gantt-row-client">${escHtml(job.client)}</span>
+            </div>
+            <div class="gantt-timeline gantt-timeline--row">
+              <!-- Rain/weekend column shading (background layer) -->
+              ${dayHeaders.map(h => `<div class="gantt-bg-col ${h.isRain ? 'gantt-day--rain' : ''} ${h.isWeekend ? 'gantt-day--weekend' : ''}"
+                style="width:${(100/totalDays).toFixed(2)}%"></div>`).join('')}
+
+              <!-- Job bar -->
+              <div class="gantt-bar" style="left:${left}%;width:${w}%;background:${color}"
+                   onclick="openSchedJobDetail('${escHtml(job.id)}')"
+                   title="${escHtml(job.name)} — ${schedFmtDate(job.startDate)} to ${schedFmtDate(job.endDate)}">
+                <span class="gantt-bar-label">${escHtml(job.name)}</span>
+                ${rainRisk ? '<span class="gantt-bar-rain">⚠</span>' : ''}
+              </div>
+
+              <!-- Event badges on timeline -->
+              ${jobEvts.map(ev => {
+                const evLeft = parseFloat(pct(ev.date));
+                if (evLeft < 0 || evLeft > 100) return '';
+                const ec = EVENT_COLORS[ev.type] || '#D4A843';
+                return `<div class="gantt-event-badge" style="left:${evLeft}%;border-color:${ec};color:${ec}"
+                             title="${escHtml(ev.type)}: ${escHtml(ev.notes || '')} (${schedFmtDate(ev.date)})">${escHtml(ev.type.slice(0,3))}</div>`;
+              }).join('')}
+            </div>
+          </div>`;
+      }).join('')}
+    </div>`;
+}
+
+// ── Job cards ─────────────────────────────────────────────────────────────────
+function renderSchedJobCards(jobs) {
+  const el = document.getElementById('schedJobCards');
+  if (!el) return;
+
+  if (!jobs.length) {
+    el.innerHTML = '<p class="sched-empty">No jobs yet. Click "+ Add Job" to get started.</p>';
+    return;
+  }
+
+  const today = schedDateStr(new Date());
+  const assignments = loadSchedAssign();
+
+  el.innerHTML = jobs.map(job => {
+    const color   = schedJobColor(job);
+    const isOverdue = job.status !== 'Complete' && job.endDate < today;
+    const duration = schedDaysDiff(job.startDate, job.endDate);
+    const assignedCrew = new Set();
+    for (const [key, crew] of Object.entries(assignments)) {
+      if (key.startsWith(job.id + '|')) crew.forEach(n => assignedCrew.add(n));
+    }
+
+    return `
+      <div class="sched-job-card ${isOverdue ? 'sched-job-card--overdue' : ''}" style="border-left-color:${color}">
+        <div class="sched-job-card-header">
+          <span class="sched-job-card-name">${escHtml(job.name)}</span>
+          <span class="sched-job-card-status" style="color:${color}">${escHtml(job.status)}</span>
+          ${!job.sm8 ? `
+          <button class="sched-icon-btn" onclick="openSchedJobForm('${escHtml(job.id)}')" title="Edit">&#9998;</button>
+          <button class="sched-icon-btn sched-icon-btn--del" onclick="deleteSchedJob('${escHtml(job.id)}')" title="Delete">&#10005;</button>
+          ` : '<span class="sched-sm8-tag">SM8</span>'}
+        </div>
+        <div class="sched-job-card-meta">
+          <span>${escHtml(job.client)}</span>
+          <span>${escHtml(job.address || '—')}</span>
+          <span>${schedFmtDate(job.startDate)} → ${schedFmtDate(job.endDate)} (${duration} days)</span>
+          ${job.value ? `<span>${fmtCurrency(job.value)}</span>` : ''}
+        </div>
+        ${assignedCrew.size ? `<div class="sched-job-crew">&#128101; ${escHtml([...assignedCrew].join(', '))}</div>` : ''}
+      </div>`;
+  }).join('');
+}
+
+// ── Open job detail (from Gantt bar click) ────────────────────────────────────
+function openSchedJobDetail(jobId) {
+  const { jobs } = buildSchedJobs();
+  const job = jobs.find(j => j.id === jobId);
+  if (!job) return;
+
+  const weatherCache = siteWeatherCache.get('__schedule__');
+  const rainDays = weatherCache ? weatherCache.days.filter(d => d.rainProb > 60 && d.date >= job.startDate && d.date <= job.endDate) : [];
+
+  const assignments = loadSchedAssign();
+  const crewByDay = {};
+  for (const [key, crew] of Object.entries(assignments)) {
+    if (key.startsWith(jobId + '|')) {
+      crewByDay[key.split('|')[1]] = crew;
+    }
+  }
+  const crewList = loadSchedCrew();
+  const today = schedDateStr(new Date());
+  const duration = schedDaysDiff(job.startDate, job.endDate);
+
+  let overlay = document.getElementById('schedJobDetailOverlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'schedJobDetailOverlay';
+    overlay.className = 'ai-modal-overlay';
+    document.body.appendChild(overlay);
+  }
+
+  overlay.innerHTML = `
+    <div class="ai-modal ai-modal--wide">
+      <div class="ai-modal-header">
+        <span class="ai-modal-title">${escHtml(job.name)}</span>
+        <button class="btn-modal-close" onclick="document.getElementById('schedJobDetailOverlay').classList.remove('is-open')">&#10005;</button>
+      </div>
+      <div class="ai-modal-body">
+        <div class="sched-detail-meta">
+          <div class="sched-detail-row"><span>Client</span><strong>${escHtml(job.client)}</strong></div>
+          <div class="sched-detail-row"><span>Address</span><strong>${escHtml(job.address || '—')}</strong></div>
+          <div class="sched-detail-row"><span>Dates</span><strong>${schedFmtDate(job.startDate)} → ${schedFmtDate(job.endDate)} (${duration} day${duration !== 1 ? 's' : ''})</strong></div>
+          <div class="sched-detail-row"><span>Status</span><strong style="color:${schedJobColor(job)}">${escHtml(job.status)}</strong></div>
+          ${job.value ? `<div class="sched-detail-row"><span>Value</span><strong style="color:var(--gold)">${fmtCurrency(job.value)}</strong></div>` : ''}
+        </div>
+        ${rainDays.length ? `
+          <div class="weather-rain-note" style="margin:1rem 0">
+            &#9888; <strong>${rainDays.length} rain risk day${rainDays.length !== 1 ? 's' : ''}</strong> during this job:
+            ${rainDays.map(d => schedFmtDate(d.date)).join(', ')}
+          </div>` : ''}
+
+        <div class="sched-crew-section">
+          <div class="sm8-section-label" style="margin-bottom:0.6rem">Crew Assignment</div>
+          ${crewList.length === 0 ? `<p class="sched-empty" style="font-size:0.82rem">No crew members set up. Use the Crew button to add crew.</p>` : `
+          <div class="sched-crew-days">
+            ${(function() {
+              const rows = [];
+              for (let i = 0; i < duration; i++) {
+                const d = schedAddDays(job.startDate, i);
+                const dt = new Date(d + 'T00:00:00');
+                const isWeekend = dt.getDay() === 0 || dt.getDay() === 6;
+                const assigned  = crewByDay[d] || [];
+                rows.push(`
+                  <div class="sched-crew-day ${isWeekend ? 'sched-crew-day--weekend' : ''}">
+                    <div class="sched-crew-day-date">${dt.toLocaleDateString('en-AU', { weekday:'short', day:'numeric', month:'short' })}</div>
+                    <div class="sched-crew-day-picks">
+                      ${crewList.map(name => {
+                        const checked = assigned.includes(name);
+                        return `<label class="sf-crew-check-lbl">
+                          <input type="checkbox" ${checked ? 'checked' : ''}
+                            onchange="toggleSchedCrewAssign('${escHtml(jobId)}','${escHtml(d)}','${escHtml(name)}',this.checked)"
+                            style="accent-color:var(--gold)" /> ${escHtml(name)}
+                        </label>`;
+                      }).join('')}
+                    </div>
+                  </div>`);
+              }
+              return rows.join('');
+            })()}
+          </div>`}
+        </div>
+      </div>
+    </div>`;
+  overlay.classList.add('is-open');
+}
+
+function toggleSchedCrewAssign(jobId, date, name, checked) {
+  const assign = loadSchedAssign();
+  const key    = `${jobId}|${date}`;
+  if (!assign[key]) assign[key] = [];
+  if (checked) {
+    if (!assign[key].includes(name)) assign[key].push(name);
+  } else {
+    assign[key] = assign[key].filter(n => n !== name);
+  }
+  saveSchedAssign(assign);
+  // Re-render cards (not full tab, just cards) to update crew display
+  const { jobs } = buildSchedJobs();
+  renderSchedJobCards(jobs);
+}
+
+// ── Add/Edit job form ─────────────────────────────────────────────────────────
+function openSchedJobForm(editId) {
+  const jobs    = loadSchedJobs();
+  const editing = editId ? jobs.find(j => j.id === editId) : null;
+  const today   = schedDateStr(new Date());
+
+  let overlay = document.getElementById('schedJobFormOverlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'schedJobFormOverlay';
+    overlay.className = 'ai-modal-overlay';
+    document.body.appendChild(overlay);
+  }
+
+  const v = editing || { name:'', client:'', address:'', startDate: today, endDate: schedAddDays(today, 7), value:'', status:'Confirmed' };
+
+  overlay.innerHTML = `
+    <div class="ai-modal">
+      <div class="ai-modal-header">
+        <span class="ai-modal-title">${editing ? 'Edit Job' : '+ Add Job'}</span>
+        <button class="btn-modal-close" onclick="document.getElementById('schedJobFormOverlay').classList.remove('is-open')">&#10005;</button>
+      </div>
+      <div class="ai-modal-body">
+        <div class="subbie-form">
+          <div class="subbie-form-row"><label class="calc-label">Job Name *</label>
+            <input id="sjf_name" class="calc-input" value="${escHtml(v.name)}" placeholder="e.g. 25 Bradfield Rd — Brick Veneer" /></div>
+          <div class="subbie-form-row"><label class="calc-label">Client Name</label>
+            <input id="sjf_client" class="calc-input" value="${escHtml(v.client)}" placeholder="Client or builder name" /></div>
+          <div class="subbie-form-row"><label class="calc-label">Address</label>
+            <input id="sjf_address" class="calc-input" value="${escHtml(v.address)}" placeholder="Job address" /></div>
+          <div class="subbie-form-row"><label class="calc-label">Start Date *</label>
+            <input id="sjf_start" class="calc-input" type="date" value="${escHtml(v.startDate)}" /></div>
+          <div class="subbie-form-row"><label class="calc-label">Est. End Date *</label>
+            <input id="sjf_end" class="calc-input" type="date" value="${escHtml(v.endDate)}" /></div>
+          <div class="subbie-form-row"><label class="calc-label">Job Value ($)</label>
+            <input id="sjf_value" class="calc-input" type="number" min="0" step="100" value="${v.value || ''}" placeholder="0" /></div>
+          <div class="subbie-form-row"><label class="calc-label">Status</label>
+            <select id="sjf_status" class="calc-input">
+              ${['Quoted','Confirmed','In Progress','Complete'].map(s => `<option ${v.status === s ? 'selected' : ''}>${s}</option>`).join('')}
+            </select></div>
+          <button class="calc-run-btn" id="sjfSave">${editing ? 'Save Changes' : 'Add Job'}</button>
+        </div>
+      </div>
+    </div>`;
+
+  overlay.classList.add('is-open');
+
+  document.getElementById('sjfSave').addEventListener('click', () => {
+    const name  = document.getElementById('sjf_name')?.value.trim();
+    const start = document.getElementById('sjf_start')?.value;
+    const end   = document.getElementById('sjf_end')?.value;
+    if (!name || !start || !end) { showToast('Job name, start date and end date are required', 'error'); return; }
+    if (end < start) { showToast('End date must be after start date', 'error'); return; }
+
+    const entry = {
+      id:        editing ? editing.id : 'sj_' + Date.now(),
+      name,
+      client:    document.getElementById('sjf_client')?.value.trim() || '',
+      address:   document.getElementById('sjf_address')?.value.trim() || '',
+      startDate: start,
+      endDate:   end,
+      value:     parseFloat(document.getElementById('sjf_value')?.value || 0) || 0,
+      status:    document.getElementById('sjf_status')?.value || 'Confirmed',
+    };
+
+    const list = loadSchedJobs();
+    if (editing) {
+      const idx = list.findIndex(j => j.id === editing.id);
+      if (idx >= 0) list[idx] = entry; else list.push(entry);
+    } else {
+      list.push(entry);
+    }
+    saveSchedJobs(list);
+    overlay.classList.remove('is-open');
+    renderScheduleTab();
+    showToast(editing ? 'Job updated' : 'Job added', 'success', 2000);
+  });
+}
+
+function deleteSchedJob(id) {
+  if (!confirm('Delete this job from the schedule?')) return;
+  const list = loadSchedJobs().filter(j => j.id !== id);
+  saveSchedJobs(list);
+  renderScheduleTab();
+  showToast('Job deleted', 'info', 2000);
+}
+
+// ── Add event form ────────────────────────────────────────────────────────────
+function openSchedEventForm() {
+  const { jobs } = buildSchedJobs();
+  const today = schedDateStr(new Date());
+
+  let overlay = document.getElementById('schedEventFormOverlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'schedEventFormOverlay';
+    overlay.className = 'ai-modal-overlay';
+    document.body.appendChild(overlay);
+  }
+
+  const jobOpts = ['', ...jobs.map(j => j.id)]
+    .map(id => {
+      const j = jobs.find(x => x.id === id);
+      return `<option value="${escHtml(id)}">${j ? escHtml(j.name) : '— No specific job —'}</option>`;
+    }).join('');
+
+  overlay.innerHTML = `
+    <div class="ai-modal">
+      <div class="ai-modal-header">
+        <span class="ai-modal-title">&#9873; Add Event / Milestone</span>
+        <button class="btn-modal-close" onclick="document.getElementById('schedEventFormOverlay').classList.remove('is-open')">&#10005;</button>
+      </div>
+      <div class="ai-modal-body">
+        <div class="subbie-form">
+          <div class="subbie-form-row"><label class="calc-label">Date *</label>
+            <input id="sev_date" class="calc-input" type="date" value="${today}" /></div>
+          <div class="subbie-form-row"><label class="calc-label">Job (optional)</label>
+            <select id="sev_job" class="calc-input">${jobOpts}</select></div>
+          <div class="subbie-form-row"><label class="calc-label">Type *</label>
+            <select id="sev_type" class="calc-input">
+              <option>Delivery</option><option>Inspection</option>
+              <option>Builder Visit</option><option>Council</option><option>Milestone</option>
+            </select></div>
+          <div class="subbie-form-row"><label class="calc-label">Notes</label>
+            <input id="sev_notes" class="calc-input" placeholder="Optional details" /></div>
+          <button class="calc-run-btn" id="sevSave">Save Event</button>
+        </div>
+      </div>
+    </div>`;
+
+  overlay.classList.add('is-open');
+
+  document.getElementById('sevSave').addEventListener('click', () => {
+    const date = document.getElementById('sev_date')?.value;
+    if (!date) { showToast('Date is required', 'error'); return; }
+    const entry = {
+      id:    'ev_' + Date.now(),
+      date,
+      jobId: document.getElementById('sev_job')?.value || '',
+      type:  document.getElementById('sev_type')?.value || 'Milestone',
+      notes: document.getElementById('sev_notes')?.value.trim() || '',
+    };
+    const list = loadSchedEvents();
+    list.push(entry);
+    saveSchedEvents(list);
+    overlay.classList.remove('is-open');
+    renderScheduleTab();
+    showToast('Event saved', 'success', 2000);
+  });
+}
+
+// ── Crew settings panel ───────────────────────────────────────────────────────
+function openSchedCrewSettings() {
+  let overlay = document.getElementById('schedCrewOverlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'schedCrewOverlay';
+    overlay.className = 'ai-modal-overlay';
+    document.body.appendChild(overlay);
+  }
+
+  function renderCrewList() {
+    const crew = loadSchedCrew();
+    return `
+      <div class="sched-crew-list" id="schedCrewList">
+        ${crew.length === 0 ? '<p class="sched-empty">No crew members added yet.</p>' : ''}
+        ${crew.map((name, i) => `
+          <div class="sched-crew-item">
+            <span>${escHtml(name)}</span>
+            <button class="sched-icon-btn sched-icon-btn--del" onclick="deleteSchedCrewMember(${i})">&#10005;</button>
+          </div>`).join('')}
+      </div>
+      <div style="display:flex;gap:0.5rem;margin-top:0.8rem">
+        <input id="schedNewCrewName" class="calc-input" placeholder="Crew member name" style="flex:1" />
+        <button class="calc-run-btn" style="white-space:nowrap" onclick="addSchedCrewMember()">+ Add</button>
+      </div>`;
+  }
+
+  overlay.innerHTML = `
+    <div class="ai-modal">
+      <div class="ai-modal-header">
+        <span class="ai-modal-title">&#128101; Crew Members</span>
+        <button class="btn-modal-close" onclick="document.getElementById('schedCrewOverlay').classList.remove('is-open')">&#10005;</button>
+      </div>
+      <div class="ai-modal-body" id="schedCrewBody">
+        ${renderCrewList()}
+      </div>
+    </div>`;
+
+  overlay.classList.add('is-open');
+}
+
+// These need to be global so inline onclick can reach them
+window.openSchedJobDetail    = openSchedJobDetail;
+window.openSchedJobForm      = openSchedJobForm;
+window.deleteSchedJob        = deleteSchedJob;
+window.toggleSchedCrewAssign = toggleSchedCrewAssign;
+window.deleteSchedCrewMember = function(idx) {
+  const crew = loadSchedCrew();
+  crew.splice(idx, 1);
+  saveSchedCrew(crew);
+  const body = document.getElementById('schedCrewBody');
+  if (body) body.innerHTML = (function renderCrewList() {
+    const c = loadSchedCrew();
+    return `
+      <div class="sched-crew-list" id="schedCrewList">
+        ${c.length === 0 ? '<p class="sched-empty">No crew members added yet.</p>' : ''}
+        ${c.map((name, i) => `
+          <div class="sched-crew-item">
+            <span>${escHtml(name)}</span>
+            <button class="sched-icon-btn sched-icon-btn--del" onclick="deleteSchedCrewMember(${i})">&#10005;</button>
+          </div>`).join('')}
+      </div>
+      <div style="display:flex;gap:0.5rem;margin-top:0.8rem">
+        <input id="schedNewCrewName" class="calc-input" placeholder="Crew member name" style="flex:1" />
+        <button class="calc-run-btn" style="white-space:nowrap" onclick="addSchedCrewMember()">+ Add</button>
+      </div>`;
+  })();
+};
+window.addSchedCrewMember = function() {
+  const inp  = document.getElementById('schedNewCrewName');
+  const name = inp?.value.trim();
+  if (!name) return;
+  const crew = loadSchedCrew();
+  if (!crew.includes(name)) { crew.push(name); saveSchedCrew(crew); }
+  inp.value = '';
+  window.deleteSchedCrewMember(-1); // re-render without removing
+};
+
+// ── Wire buttons on tab render ────────────────────────────────────────────────
+(function initSchedButtons() {
+  document.getElementById('btnAddSchedJob')?.addEventListener('click', () => openSchedJobForm(null));
+  document.getElementById('btnAddSchedEvent')?.addEventListener('click', openSchedEventForm);
+  document.getElementById('btnSchedCrewSettings')?.addEventListener('click', openSchedCrewSettings);
+})();
 
 // ─── Start ────────────────────────────────────────────────────────────────────
 _initModalOverlayClick();
