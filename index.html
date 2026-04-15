@@ -114,6 +114,7 @@
         <span class="last-updated" id="lastUpdated">Last updated: —</span>
         <button class="btn-header-action" id="btnWeeklySummary" title="AI Weekly Summary">&#128200; Summary</button>
         <button class="btn-header-action" id="btnCalculate" title="Materials Calculator">&#129523; Calculate</button>
+        <button class="btn-header-action" id="btnReadPlan" title="AI Plan Reader">&#128196; Read Plan</button>
         <button class="btn-settings" id="btnSettings" title="Settings">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
         </button>
@@ -416,6 +417,7 @@
                   <th>Invoice</th>
                   <th>Payment</th>
                   <th>Date</th>
+                  <th class="jobs-col-chase"></th>
                   <th class="jobs-col-profit" id="thProfit">Profit Est.</th>
                 </tr>
               </thead>
@@ -492,6 +494,10 @@
         <div class="sm8-section-label">Material Price Watch</div>
         <div id="financeBrickPrices"></div>
 
+        <!-- Payroll Estimator -->
+        <div class="sm8-section-label">Payroll Estimator</div>
+        <div id="financePayroll"></div>
+
       </section>
 
     </div><!-- /#viewFinance -->
@@ -520,6 +526,28 @@
         <div id="subbiesContent"></div>
       </section>
     </div><!-- /#viewSubbies -->
+
+
+    <!-- ======================================================
+         SAFETY TAB VIEW
+         ====================================================== -->
+    <div id="viewSafety" hidden>
+      <section class="jobs-section">
+        <div class="safety-header-row">
+          <div class="sm8-section-label" style="margin:0">&#9925; Safety &amp; Compliance Logger</div>
+          <div class="safety-header-actions">
+            <button class="btn-add-subbie" id="btnLogTalk">&#43; Toolbox Talk</button>
+            <button class="btn-add-subbie btn-add-subbie--incident" id="btnLogIncident">&#9888; Log Incident</button>
+            <button class="btn-safety-export" id="btnExportSafety">&#8681; Export Report</button>
+          </div>
+        </div>
+        <div id="safetyKPIs"></div>
+        <div class="sm8-section-label" style="margin-top:1.5rem">Toolbox Talks</div>
+        <div id="safetyTalks"></div>
+        <div class="sm8-section-label" style="margin-top:1.5rem">Incident Log</div>
+        <div id="safetyIncidents"></div>
+      </section>
+    </div><!-- /#viewSafety -->
 
   </main>
 
@@ -697,6 +725,32 @@
 
   </div><!-- /#dashboardRoot -->
 
+  <!-- ======================================================
+       AI PLAN READER MODAL
+       ====================================================== -->
+  <div id="planReaderOverlay" class="ai-modal-overlay" role="dialog" aria-modal="true">
+    <div class="ai-modal ai-modal--wide">
+      <div class="ai-modal-header">
+        <span class="ai-modal-title">&#128196; AI Plan Reader — Bricklaying Estimator</span>
+        <button class="btn-modal-close" id="planReaderClose" aria-label="Close">&#10005;</button>
+      </div>
+      <div class="ai-modal-body">
+        <div id="planDropZone" class="plan-drop-zone">
+          <input type="file" id="planFileInput" accept=".pdf" hidden />
+          <div class="plan-drop-icon">&#128196;</div>
+          <div class="plan-drop-text">Drop a PDF building plan here, or <span class="plan-drop-link">click to upload</span></div>
+          <div class="plan-drop-hint">Works best with digital (CAD/Revit) PDFs — not scanned images</div>
+        </div>
+        <div id="planFileInfo" class="plan-file-info" hidden></div>
+        <button class="calc-run-btn" id="btnAnalysePlan" disabled style="margin-top:1rem">&#9654; Analyse Plan</button>
+        <div id="planResults" class="plan-results" hidden></div>
+        <button class="calc-copy-btn" id="btnCopyPlanQuote" hidden>&#128203; Copy Quote</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- PDF.js (text extraction for plan reader) -->
+  <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

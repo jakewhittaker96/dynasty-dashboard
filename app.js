@@ -131,6 +131,17 @@ const DEFAULT_BRICK_PRICES = [
   { name: 'Mortar (Bagged Mix)',     unit: '40kg bag',    price: 14,   updated: null },
   { name: 'Besser Block 390mm',     unit: '100 blocks',  price: 310,  updated: null },
 ];
+function loadChaseLog() {
+  try { return JSON.parse(localStorage.getItem('dynasty-chase-log') || '{}'); } catch { return {}; }
+}
+function saveChaseLog(obj) { localStorage.setItem('dynasty-chase-log', JSON.stringify(obj)); }
+
+function loadSafetyData() {
+  const d = { talks: [], incidents: [] };
+  try { return JSON.parse(localStorage.getItem('dynasty-safety') || 'null') || d; } catch { return d; }
+}
+function saveSafetyData(obj) { localStorage.setItem('dynasty-safety', JSON.stringify(obj)); }
+
 function loadBrickPrices() {
   try {
     const saved = JSON.parse(localStorage.getItem('dynasty-brick-prices') || 'null');
@@ -180,6 +191,7 @@ const dom = {
   viewFinance:     $('viewFinance'),
   viewRisk:        $('viewRisk'),
   viewSubbies:     $('viewSubbies'),
+  viewSafety:      $('viewSafety'),
   // Jobs tab
   jobsRevenue:     $('jobsRevenue'),
   jobsSearch:      $('jobsSearch'),
@@ -481,6 +493,7 @@ function buildTabs(bySite) {
     makeTab('__finance__',  'Finance',  null);
     makeTab('__risk__',     'Risk Report', null);
     makeTab('__subbies__',  'Subbies',  null);
+    makeTab('__safety__',   'Safety',   null);
   }
 
   // Hide biz toggle in portal/builder mode
@@ -497,8 +510,11 @@ function updateTabBadges(jobs) {
   const now = new Date();
   const MS  = 1000 * 60 * 60 * 24;
 
-  // Jobs tab: count of unpaid completed jobs
-  const unpaidCompleted = jobs.filter(j => j.status === 'Completed' && !isPaid(j)).length;
+  // Jobs tab: unpaid completed jobs that haven't been chased yet
+  const chaseLog        = loadChaseLog();
+  const unpaidCompleted = jobs.filter(j =>
+    j.status === 'Completed' && !isPaid(j) && !chaseLog[j.uuid]
+  ).length;
 
   // Pipeline tab: overdue work orders (>30 days old)
   const overdueCount = jobs.filter(j => {
@@ -540,6 +556,7 @@ function switchTab(siteKey) {
     dom.viewFinance.hidden  = id !== 'finance';
     if (dom.viewRisk)    dom.viewRisk.hidden    = id !== 'risk';
     if (dom.viewSubbies) dom.viewSubbies.hidden = id !== 'subbies';
+    if (dom.viewSafety)  dom.viewSafety.hidden  = id !== 'safety';
   };
 
   if (siteKey === '__all__') {
@@ -560,6 +577,9 @@ function switchTab(siteKey) {
   } else if (siteKey === '__subbies__') {
     showOnly('subbies');
     renderSubbiesTab();
+  } else if (siteKey === '__safety__') {
+    showOnly('safety');
+    renderSafetyTab();
   }
 }
 
@@ -1873,6 +1893,7 @@ function renderFinanceTabContent() {
   renderClientHealth(bizJobs);
   renderCashFlowForecast(bizJobs);
   renderBrickPriceTracker();
+  renderPayrollCalculator(bizJobs);
 }
 
 // ─── Revenue trend chart (Finance tab) ───────────────────────────────────────
@@ -2219,7 +2240,7 @@ function applyJobsFilters() {
   const jobsTable = document.getElementById('jobsTable');
   if (jobsTable) jobsTable.classList.toggle('show-profit', showProfit);
 
-  const colSpan = showProfit ? 8 : 7;
+  const colSpan = showProfit ? 9 : 8;
 
   if (!filtered.length) {
     dom.jobsTableBody.innerHTML =
@@ -2229,6 +2250,7 @@ function applyJobsFilters() {
 
   const profitMap  = showProfit ? buildJobProfitMap() : null;
   const DAILY_COST = 800;
+  const chaseLog   = loadChaseLog();
 
   dom.jobsTableBody.innerHTML = filtered.map(job => {
     const desc      = (job.job_description || '').split('\n')[0].trim() || '—';
@@ -2243,6 +2265,18 @@ function applyJobsFilters() {
     const payBadge  = paid
       ? '<span class="payment-badge payment-badge--paid">Paid</span>'
       : '<span class="payment-badge payment-badge--unpaid">Unpaid</span>';
+
+    // Chase button cell
+    let chaseTd = '<td class="jobs-col-chase"></td>';
+    if (status === 'Completed' && !paid && amount > 0) {
+      const chased = chaseLog[job.uuid];
+      if (chased) {
+        const daysAgo = Math.max(0, Math.floor((Date.now() - chased.ts) / (1000 * 60 * 60 * 24)));
+        chaseTd = `<td class="jobs-col-chase"><span class="chase-done">Chased ${daysAgo}d ago</span></td>`;
+      } else {
+        chaseTd = `<td class="jobs-col-chase"><button class="chase-btn" data-chase-uuid="${escHtml(job.uuid)}">&#128394; Chase</button></td>`;
+      }
+    }
 
     let profitTd = '';
     if (showProfit) {
@@ -2264,6 +2298,7 @@ function applyJobsFilters() {
       <td class="jobs-col-amount">${escHtml(amountStr)}</td>
       <td>${payBadge}</td>
       <td class="jobs-col-date">${escHtml(dateStr)}</td>
+      ${chaseTd}
       ${profitTd}
     </tr>`;
   }).join('');
@@ -2460,7 +2495,7 @@ async function loadSheet() {
   buildTabs(currentBySite);
 
   // If the previously active site tab no longer exists, fall back to All Jobs
-  const sm8Tabs = new Set(['__jobs__', '__pipeline__', '__finance__', '__risk__', '__subbies__']);
+  const sm8Tabs = new Set(['__jobs__', '__pipeline__', '__finance__', '__risk__', '__subbies__', '__safety__']);
   if (activeTab !== '__all__' && !sm8Tabs.has(activeTab) && !currentBySite.has(activeTab)) {
     activeTab = '__all__';
   }
@@ -2630,6 +2665,18 @@ setInterval(loadSheet, 5 * 60 * 1000);
     btn.classList.toggle('jobs-action-btn--active', showProfit);
     btn.textContent = showProfit ? '✕ Hide Profit' : '$ Show Profit';
     if (jobsLoaded) applyJobsFilters();
+  });
+})();
+
+// ─── Invoice Chase — event delegation on jobs table ──────────────────────────
+(function initChaseDelegate() {
+  const tbody = document.getElementById('jobsTableBody');
+  if (!tbody) return;
+  tbody.addEventListener('click', e => {
+    const btn = e.target.closest('[data-chase-uuid]');
+    if (!btn) return;
+    const job = activeJobsData.find(j => j.uuid === btn.dataset.chaseUuid);
+    if (job) openChaseModal(job);
   });
 })();
 
@@ -3583,6 +3630,556 @@ async function generateWeeklySummary() {
 })();
 
 
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// FEATURE: INVOICE CHASE MODAL
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function openChaseModal(job) {
+  const clientName = sm8CompanyMap.get(job.company_uuid || '') || 'Client';
+  const amount     = parseFloat(job.total_invoice_amount || 0);
+  const jobRef     = job.job_number ? `#${job.job_number}` : `#${(job.uuid || '').slice(0, 8).toUpperCase()}`;
+  const msg        = `Hi ${clientName}, this is a reminder that invoice ${jobRef} for ${fmtCurrency(amount)} is outstanding. Please arrange payment at your earliest convenience. Thank you — Whittaker Bricklaying`;
+
+  let overlay = document.getElementById('chaseOverlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'chaseOverlay';
+    overlay.className = 'ai-modal-overlay';
+    overlay.setAttribute('role', 'dialog');
+    overlay.setAttribute('aria-modal', 'true');
+    document.body.appendChild(overlay);
+  }
+
+  const chased = loadChaseLog()[job.uuid];
+
+  overlay.innerHTML = `
+    <div class="ai-modal">
+      <div class="ai-modal-header">
+        <span class="ai-modal-title">&#128394; Chase Invoice</span>
+        <button class="btn-modal-close" id="chaseClose">&#10005;</button>
+      </div>
+      <div class="ai-modal-body">
+        <div class="chase-header">
+          <div class="chase-client">${escHtml(clientName)}</div>
+          <div class="chase-amount">${fmtCurrency(amount)}</div>
+        </div>
+        ${chased ? `<div class="chase-already-note">&#10003; Previously chased ${Math.floor((Date.now() - chased.ts) / 86400000)} days ago</div>` : ''}
+        <label class="calc-label" style="margin-top:0.75rem;display:block">Message (edit as needed):</label>
+        <textarea id="chaseMsgText" class="chase-textarea">${escHtml(msg)}</textarea>
+        <div class="chase-actions">
+          <button class="calc-run-btn" id="btnCopyChaseMsg">&#128203; Copy Message</button>
+          <button class="chase-mark-btn" id="btnMarkChased">&#10003; Mark as Chased</button>
+        </div>
+      </div>
+    </div>`;
+
+  overlay.classList.add('is-open');
+
+  document.getElementById('chaseClose')?.addEventListener('click', () => overlay.classList.remove('is-open'));
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.classList.remove('is-open'); });
+
+  document.getElementById('btnCopyChaseMsg')?.addEventListener('click', () => {
+    const text = document.getElementById('chaseMsgText')?.value || msg;
+    navigator.clipboard.writeText(text).then(
+      () => showToast('Message copied!', 'success'),
+      () => showToast('Copy failed — select the text manually', 'error')
+    );
+  });
+
+  document.getElementById('btnMarkChased')?.addEventListener('click', () => {
+    const log = loadChaseLog();
+    log[job.uuid] = { ts: Date.now(), clientName, amount };
+    saveChaseLog(log);
+    overlay.classList.remove('is-open');
+    applyJobsFilters();
+    updateTabBadges(filterByBiz(activeJobsData));
+    showToast(`${clientName} marked as chased`, 'success', 2000);
+  });
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// FEATURE: WAGE & SUPER CALCULATOR (Finance tab — Payroll Estimator)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function renderPayrollCalculator(jobs) {
+  const el = document.getElementById('financePayroll');
+  if (!el) return;
+
+  el.innerHTML = `
+    <div class="payroll-wrap">
+      <div class="payroll-inputs">
+        <div class="payroll-input-group">
+          <label class="calc-label">Crew members</label>
+          <input type="number" id="pc_crew"  class="payroll-input" value="3"    min="1"  max="50"  step="1" />
+        </div>
+        <div class="payroll-input-group">
+          <label class="calc-label">Hours this week</label>
+          <input type="number" id="pc_hours" class="payroll-input" value="38"   min="0"  max="80"  step="0.5" />
+        </div>
+        <div class="payroll-input-group">
+          <label class="calc-label">Hourly rate ($/hr)</label>
+          <input type="number" id="pc_rate"  class="payroll-input" value="45"   min="0"  step="0.50" />
+        </div>
+        <div class="payroll-input-group">
+          <label class="calc-label">Super rate (%)</label>
+          <input type="number" id="pc_super" class="payroll-input" value="11.5" min="0"  max="30"  step="0.1" />
+        </div>
+      </div>
+      <div class="payroll-outputs" id="payrollOutputs"></div>
+    </div>`;
+
+  function updatePayroll() {
+    const crew      = Math.max(0, parseFloat(document.getElementById('pc_crew')?.value  || 3));
+    const hours     = Math.max(0, parseFloat(document.getElementById('pc_hours')?.value || 38));
+    const rate      = Math.max(0, parseFloat(document.getElementById('pc_rate')?.value  || 45));
+    const superPct  = Math.max(0, parseFloat(document.getElementById('pc_super')?.value || 11.5)) / 100;
+
+    const grossWeek     = crew * hours * rate;
+    const superWeek     = grossWeek * superPct;
+    const totalWeek     = grossWeek + superWeek;
+    const totalMonth    = totalWeek * 4.333;
+    const totalAnnual   = totalWeek * 52;
+
+    // FYTD revenue for % calculation
+    let fytdRevenue = 0;
+    if (jobs && jobs.length) {
+      const fyMo = 6; // July = month index 6
+      const now  = new Date();
+      const fyYear = now.getMonth() >= fyMo ? now.getFullYear() : now.getFullYear() - 1;
+      const fyStart = new Date(fyYear, fyMo, 1);
+      fytdRevenue = jobs
+        .filter(j => j.status === 'Completed' && new Date(j.date || 0) >= fyStart)
+        .reduce((s, j) => s + parseFloat(j.total_invoice_amount || 0), 0);
+    }
+
+    const payrollPct = fytdRevenue > 0
+      ? ((totalAnnual / fytdRevenue) * 100).toFixed(1) + '%'
+      : '—';
+
+    const row = (label, value, cls = '') =>
+      `<div class="payroll-output-row${cls ? ' ' + cls : ''}"><span>${label}</span><strong>${value}</strong></div>`;
+
+    const out = document.getElementById('payrollOutputs');
+    if (!out) return;
+    out.innerHTML =
+      row('Gross wages this week',      fmtCurrency(grossWeek)) +
+      row('Super liability this week',  fmtCurrency(superWeek)) +
+      row('Total payroll cost (week)',   fmtCurrency(totalWeek),  ' payroll-row--total') +
+      row('Estimated monthly payroll',  fmtCurrency(totalMonth)) +
+      row('Estimated annual payroll',   fmtCurrency(totalAnnual)) +
+      row('% of current FYTD revenue',  payrollPct, fytdRevenue > 0 && (totalAnnual / fytdRevenue) > 0.5 ? ' payroll-row--warn' : '');
+  }
+
+  ['pc_crew', 'pc_hours', 'pc_rate', 'pc_super'].forEach(id =>
+    document.getElementById(id)?.addEventListener('input', updatePayroll)
+  );
+  updatePayroll();
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// FEATURE: AI PLAN READER
+// ═══════════════════════════════════════════════════════════════════════════════
+
+async function extractPDFText(file) {
+  const lib = window.pdfjsLib;
+  if (!lib) throw new Error('PDF reader not loaded — please refresh the page.');
+
+  lib.GlobalWorkerOptions.workerSrc =
+    'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
+
+  const buf  = await file.arrayBuffer();
+  const pdf  = await lib.getDocument({ data: new Uint8Array(buf) }).promise;
+  let text   = `[PDF: "${file.name}" — ${pdf.numPages} page(s)]\n\n`;
+
+  for (let p = 1; p <= Math.min(pdf.numPages, 20); p++) {
+    const page    = await pdf.getPage(p);
+    const content = await page.getTextContent();
+    const pageStr = content.items.map(i => i.str).join(' ').trim();
+    if (pageStr) text += `[Page ${p}]\n${pageStr}\n\n`;
+  }
+  return text.trim();
+}
+
+(function initPlanReader() {
+  const btnOpen    = document.getElementById('btnReadPlan');
+  const overlay    = document.getElementById('planReaderOverlay');
+  const closeBtn   = document.getElementById('planReaderClose');
+  const dropZone   = document.getElementById('planDropZone');
+  const fileInput  = document.getElementById('planFileInput');
+  const fileInfo   = document.getElementById('planFileInfo');
+  const analyseBtn = document.getElementById('btnAnalysePlan');
+  const resultsEl  = document.getElementById('planResults');
+  const copyBtn    = document.getElementById('btnCopyPlanQuote');
+  if (!overlay) return;
+
+  let currentFile = null;
+
+  btnOpen?.addEventListener('click',  () => overlay.classList.add('is-open'));
+  closeBtn?.addEventListener('click', () => overlay.classList.remove('is-open'));
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.classList.remove('is-open'); });
+
+  // Drag-and-drop
+  dropZone?.addEventListener('click', () => fileInput?.click());
+  dropZone?.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('plan-drop--over'); });
+  dropZone?.addEventListener('dragleave', () => dropZone.classList.remove('plan-drop--over'));
+  dropZone?.addEventListener('drop', e => {
+    e.preventDefault();
+    dropZone.classList.remove('plan-drop--over');
+    const f = e.dataTransfer.files[0];
+    if (f && f.type === 'application/pdf') setFile(f);
+    else showToast('Please upload a PDF file', 'error');
+  });
+  fileInput?.addEventListener('change', () => {
+    if (fileInput.files[0]) setFile(fileInput.files[0]);
+  });
+
+  function setFile(file) {
+    currentFile = file;
+    if (fileInfo) {
+      fileInfo.hidden = false;
+      fileInfo.innerHTML = `&#128196; <strong>${escHtml(file.name)}</strong> &nbsp;(${(file.size / 1024).toFixed(0)} KB)
+        <button class="plan-change-btn" id="btnChangePlan">Change file</button>`;
+      document.getElementById('btnChangePlan')?.addEventListener('click', () => {
+        currentFile = null;
+        fileInfo.hidden = true;
+        dropZone.hidden = false;
+        if (resultsEl) { resultsEl.hidden = true; resultsEl.innerHTML = ''; }
+        if (copyBtn)   copyBtn.hidden = true;
+        if (analyseBtn) analyseBtn.disabled = true;
+        fileInput.value = '';
+      });
+    }
+    if (dropZone) dropZone.hidden = true;
+    if (analyseBtn) analyseBtn.disabled = false;
+    if (resultsEl)  { resultsEl.hidden = true; resultsEl.innerHTML = ''; }
+    if (copyBtn)    copyBtn.hidden = true;
+  }
+
+  analyseBtn?.addEventListener('click', async () => {
+    if (!currentFile) return;
+    analyseBtn.disabled = true;
+    analyseBtn.textContent = '⏳ Reading plan…';
+    if (resultsEl) { resultsEl.hidden = false; resultsEl.innerHTML = '<div class="ai-loading">Extracting text and analysing…</div>'; }
+    if (copyBtn) copyBtn.hidden = true;
+
+    try {
+      const pdfText = await extractPDFText(currentFile);
+
+      if (!pdfText || pdfText.replace(/\[.*?\]/g, '').trim().length < 80) {
+        throw new Error(
+          'Very little text was found in this PDF — it may be a scanned image. ' +
+          'Try a digital/CAD-generated PDF for best results.'
+        );
+      }
+
+      const context = pdfText.slice(0, 9000);
+      const reply   = await callClaudeAPI(
+        [{ role: 'user', content: 'Analyse this building plan and provide a complete bricklaying materials and quote estimate.' }],
+        context,
+        'plan'
+      );
+
+      if (resultsEl) {
+        resultsEl.innerHTML =
+          `<div class="plan-results-text">${escHtml(reply)
+            .replace(/\n/g, '<br>')
+            .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+            .replace(/#{1,3} (.+?)(<br>|$)/g, '<strong class="plan-heading">$1</strong>$2')
+          }</div>`;
+      }
+      if (copyBtn) {
+        copyBtn.hidden = false;
+        copyBtn.onclick = () => {
+          navigator.clipboard.writeText(reply).then(
+            () => showToast('Quote copied to clipboard!', 'success'),
+            () => showToast('Copy failed', 'error')
+          );
+        };
+      }
+
+    } catch (err) {
+      if (resultsEl) resultsEl.innerHTML = `<p class="ai-error">&#9888; ${escHtml(err.message)}</p>`;
+    } finally {
+      analyseBtn.disabled = false;
+      analyseBtn.textContent = '▶ Analyse Plan';
+    }
+  });
+})();
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// FEATURE: COMPLIANCE & SAFETY LOGGER
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function renderSafetyTab() {
+  const now        = new Date();
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const data       = loadSafetyData();
+
+  const talksMonth = data.talks.filter(t => new Date(t.date) >= monthStart);
+  const incsMonth  = data.incidents.filter(i => new Date(i.date) >= monthStart);
+
+  // Days since last incident
+  const sortedInc = [...data.incidents].sort((a, b) => new Date(b.date) - new Date(a.date));
+  let daysSinceInc = sortedInc.length === 0 ? '30+' :
+    Math.floor((now - new Date(sortedInc[0].date)) / 86400000);
+
+  const kpiEl = document.getElementById('safetyKPIs');
+  if (kpiEl) {
+    kpiEl.innerHTML = `
+      <div class="safety-kpi-grid">
+        <div class="safety-kpi">
+          <div class="safety-kpi-val">${talksMonth.length}</div>
+          <div class="safety-kpi-lbl">Toolbox talks this month</div>
+        </div>
+        <div class="safety-kpi">
+          <div class="safety-kpi-val safety-kpi-val--${incsMonth.length > 0 ? 'warn' : 'ok'}">${incsMonth.length}</div>
+          <div class="safety-kpi-lbl">Incidents this month</div>
+        </div>
+        <div class="safety-kpi">
+          <div class="safety-kpi-val safety-kpi-val--ok">${daysSinceInc}</div>
+          <div class="safety-kpi-lbl">Days since last incident</div>
+        </div>
+      </div>`;
+  }
+
+  // Toolbox talks list
+  const talksEl = document.getElementById('safetyTalks');
+  if (talksEl) {
+    if (!data.talks.length) {
+      talksEl.innerHTML = '<p class="table-empty" style="padding:1rem 0">No toolbox talks logged yet.</p>';
+    } else {
+      const sorted = [...data.talks].sort((a, b) => new Date(b.date) - new Date(a.date));
+      talksEl.innerHTML = `<div class="safety-list">
+        ${sorted.map(t => `
+          <div class="safety-item safety-item--talk">
+            <div class="safety-item-header">
+              <span class="safety-item-date">${escHtml(t.date)}</span>
+              <span class="safety-item-site">${escHtml(t.site || '—')}</span>
+              <span class="safety-item-type">&#128483; Toolbox Talk</span>
+              <button class="safety-delete-btn" data-delete-talk="${escHtml(t.id)}">&#10005;</button>
+            </div>
+            <div class="safety-item-topic"><strong>Topic:</strong> ${escHtml(t.topic || '—')}</div>
+            <div class="safety-item-att"><strong>Attendees:</strong> ${escHtml(t.attendees || '—')}</div>
+            ${t.signOff ? '<div class="safety-signoff">&#10003; Signed off</div>' : ''}
+          </div>`).join('')}
+      </div>`;
+    }
+  }
+
+  // Incidents list
+  const incsEl = document.getElementById('safetyIncidents');
+  if (incsEl) {
+    if (!data.incidents.length) {
+      incsEl.innerHTML = '<p class="table-empty" style="padding:1rem 0">No incidents recorded.</p>';
+    } else {
+      const sorted = [...data.incidents].sort((a, b) => new Date(b.date) - new Date(a.date));
+      const typeCls = { 'Near Miss': 'near-miss', 'First Aid': 'first-aid', 'Lost Time': 'lost-time', 'Property Damage': 'prop-dmg' };
+      incsEl.innerHTML = `<div class="safety-list">
+        ${sorted.map(i => `
+          <div class="safety-item safety-item--incident">
+            <div class="safety-item-header">
+              <span class="safety-item-date">${escHtml(i.date)}</span>
+              <span class="safety-item-site">${escHtml(i.site || '—')}</span>
+              <span class="safety-inc-badge safety-inc-badge--${typeCls[i.type] || 'near-miss'}">${escHtml(i.type)}</span>
+              <button class="safety-delete-btn" data-delete-inc="${escHtml(i.id)}">&#10005;</button>
+            </div>
+            <div class="safety-item-topic"><strong>Description:</strong> ${escHtml(i.description || '—')}</div>
+            ${i.correctiveAction ? `<div class="safety-item-att"><strong>Corrective action:</strong> ${escHtml(i.correctiveAction)}</div>` : ''}
+          </div>`).join('')}
+      </div>`;
+    }
+  }
+
+  // Wire delete buttons
+  document.querySelectorAll('[data-delete-talk]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (!confirm('Delete this toolbox talk?')) return;
+      const d = loadSafetyData();
+      d.talks = d.talks.filter(t => t.id !== btn.dataset.deleteTalk);
+      saveSafetyData(d);
+      renderSafetyTab();
+    });
+  });
+  document.querySelectorAll('[data-delete-inc]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (!confirm('Delete this incident?')) return;
+      const d = loadSafetyData();
+      d.incidents = d.incidents.filter(i => i.id !== btn.dataset.deleteInc);
+      saveSafetyData(d);
+      renderSafetyTab();
+    });
+  });
+}
+
+function openSafetyForm(type) {
+  // type: 'talk' | 'incident'
+  const isTalk = type === 'talk';
+  const sites  = currentBySite ? [...currentBySite.keys()] : [];
+
+  let overlay = document.getElementById('safetyFormOverlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'safetyFormOverlay';
+    overlay.className = 'ai-modal-overlay';
+    overlay.setAttribute('role', 'dialog');
+    overlay.setAttribute('aria-modal', 'true');
+    document.body.appendChild(overlay);
+  }
+
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const siteOpts = ['', ...sites].map(s => `<option value="${escHtml(s)}">${escHtml(s || '— Select site —')}</option>`).join('');
+
+  overlay.innerHTML = isTalk ? `
+    <div class="ai-modal">
+      <div class="ai-modal-header">
+        <span class="ai-modal-title">&#128483; Log Toolbox Talk</span>
+        <button class="btn-modal-close" id="sfClose">&#10005;</button>
+      </div>
+      <div class="ai-modal-body">
+        <div class="subbie-form">
+          <div class="subbie-form-row"><label class="calc-label">Date</label>
+            <input id="sf_date" class="calc-input" type="date" value="${todayStr}" /></div>
+          <div class="subbie-form-row"><label class="calc-label">Site</label>
+            <select id="sf_site" class="calc-input">${siteOpts}</select></div>
+          <div class="subbie-form-row"><label class="calc-label">Topic discussed *</label>
+            <input id="sf_topic" class="calc-input" placeholder="e.g. Working at heights, PPE, Manual handling" /></div>
+          <div class="subbie-form-row"><label class="calc-label">Attendees (comma separated)</label>
+            <input id="sf_att" class="calc-input" placeholder="Henry, Tommy, Jhy" /></div>
+          <div class="subbie-form-row" style="flex-direction:row;align-items:center;gap:0.5rem">
+            <input type="checkbox" id="sf_signoff" style="width:auto;accent-color:var(--gold)" />
+            <label for="sf_signoff" class="calc-label" style="margin:0">I confirm this toolbox talk was conducted</label>
+          </div>
+          <button class="calc-run-btn" id="sfSave">Save Talk</button>
+        </div>
+      </div>
+    </div>` : `
+    <div class="ai-modal">
+      <div class="ai-modal-header">
+        <span class="ai-modal-title">&#9888; Log Incident</span>
+        <button class="btn-modal-close" id="sfClose">&#10005;</button>
+      </div>
+      <div class="ai-modal-body">
+        <div class="subbie-form">
+          <div class="subbie-form-row"><label class="calc-label">Date</label>
+            <input id="sf_date" class="calc-input" type="date" value="${todayStr}" /></div>
+          <div class="subbie-form-row"><label class="calc-label">Site</label>
+            <select id="sf_site" class="calc-input">${siteOpts}</select></div>
+          <div class="subbie-form-row"><label class="calc-label">Incident type *</label>
+            <select id="sf_inctype" class="calc-input">
+              <option>Near Miss</option><option>First Aid</option>
+              <option>Lost Time</option><option>Property Damage</option>
+            </select></div>
+          <div class="subbie-form-row"><label class="calc-label">Description *</label>
+            <textarea id="sf_desc" class="calc-input" rows="3" placeholder="What happened?"></textarea></div>
+          <div class="subbie-form-row"><label class="calc-label">Corrective action taken</label>
+            <textarea id="sf_action" class="calc-input" rows="2" placeholder="What was done to prevent recurrence?"></textarea></div>
+          <button class="calc-run-btn" id="sfSave">Save Incident</button>
+        </div>
+      </div>
+    </div>`;
+
+  overlay.classList.add('is-open');
+
+  document.getElementById('sfClose')?.addEventListener('click', () => overlay.classList.remove('is-open'));
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.classList.remove('is-open'); });
+
+  document.getElementById('sfSave')?.addEventListener('click', () => {
+    const d = loadSafetyData();
+
+    if (isTalk) {
+      const topic = document.getElementById('sf_topic')?.value.trim();
+      if (!topic) { showToast('Topic is required', 'error'); return; }
+      d.talks.push({
+        id:        'tk_' + Date.now(),
+        date:      document.getElementById('sf_date')?.value || todayStr,
+        site:      document.getElementById('sf_site')?.value || '',
+        topic,
+        attendees: document.getElementById('sf_att')?.value.trim() || '',
+        signOff:   document.getElementById('sf_signoff')?.checked || false,
+      });
+    } else {
+      const desc = document.getElementById('sf_desc')?.value.trim();
+      if (!desc) { showToast('Description is required', 'error'); return; }
+      d.incidents.push({
+        id:              'inc_' + Date.now(),
+        date:            document.getElementById('sf_date')?.value || todayStr,
+        site:            document.getElementById('sf_site')?.value || '',
+        type:            document.getElementById('sf_inctype')?.value || 'Near Miss',
+        description:     desc,
+        correctiveAction: document.getElementById('sf_action')?.value.trim() || '',
+      });
+    }
+
+    saveSafetyData(d);
+    overlay.classList.remove('is-open');
+    renderSafetyTab();
+    showToast(isTalk ? 'Toolbox talk saved' : 'Incident logged', 'success', 2000);
+  });
+}
+
+function exportSafetyReport() {
+  const data      = loadSafetyData();
+  const now       = new Date();
+  const monthName = now.toLocaleDateString('en-AU', { month: 'long', year: 'numeric' });
+  const monthStart= new Date(now.getFullYear(), now.getMonth(), 1);
+
+  const talksMonth = data.talks.filter(t => new Date(t.date) >= monthStart);
+  const incsMonth  = data.incidents.filter(i => new Date(i.date) >= monthStart);
+  const sortedInc  = [...data.incidents].sort((a, b) => new Date(b.date) - new Date(a.date));
+  const daysSince  = sortedInc.length === 0 ? '30+' :
+    Math.floor((now - new Date(sortedInc[0].date)) / 86400000);
+
+  let report = `DYNASTY BRICKLAYING — SAFETY & COMPLIANCE REPORT\n`;
+  report    += `Period: ${monthName}\n`;
+  report    += `Generated: ${now.toLocaleDateString('en-AU')}\n`;
+  report    += `${'─'.repeat(50)}\n\n`;
+  report    += `SUMMARY\n`;
+  report    += `Toolbox talks this month: ${talksMonth.length}\n`;
+  report    += `Incidents this month: ${incsMonth.length}\n`;
+  report    += `Days since last incident: ${daysSince}\n\n`;
+
+  report += `${'─'.repeat(50)}\nTOOLBOX TALKS (${talksMonth.length})\n\n`;
+  if (talksMonth.length === 0) {
+    report += 'No toolbox talks recorded this month.\n\n';
+  } else {
+    talksMonth.forEach(t => {
+      report += `Date: ${t.date}  |  Site: ${t.site || 'Not specified'}\n`;
+      report += `Topic: ${t.topic}\n`;
+      report += `Attendees: ${t.attendees || 'Not recorded'}\n`;
+      report += `Signed off: ${t.signOff ? 'Yes' : 'No'}\n\n`;
+    });
+  }
+
+  report += `${'─'.repeat(50)}\nINCIDENT LOG (${incsMonth.length})\n\n`;
+  if (incsMonth.length === 0) {
+    report += 'No incidents recorded this month.\n\n';
+  } else {
+    incsMonth.forEach(i => {
+      report += `Date: ${i.date}  |  Site: ${i.site || 'Not specified'}  |  Type: ${i.type}\n`;
+      report += `Description: ${i.description}\n`;
+      if (i.correctiveAction) report += `Corrective action: ${i.correctiveAction}\n`;
+      report += '\n';
+    });
+  }
+
+  report += `${'─'.repeat(50)}\nEnd of report\n`;
+
+  navigator.clipboard.writeText(report).then(
+    () => showToast('Safety report copied to clipboard!', 'success', 3000),
+    () => showToast('Could not copy — try a different browser', 'error')
+  );
+}
+
+(function initSafetyButtons() {
+  document.getElementById('btnLogTalk')?.addEventListener('click',     () => openSafetyForm('talk'));
+  document.getElementById('btnLogIncident')?.addEventListener('click', () => openSafetyForm('incident'));
+  document.getElementById('btnExportSafety')?.addEventListener('click', exportSafetyReport);
+})();
 
 
 // ─── Start ────────────────────────────────────────────────────────────────────

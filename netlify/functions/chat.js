@@ -46,12 +46,42 @@ exports.handler = async (event) => {
     : 'No live business data was provided for this request.';
 
   let systemPrompt;
+  let maxTokens = 1024;
+
   if (role === 'summary') {
     systemPrompt =
       `You are Dynasty AI, a business analyst assistant for Dynasty Bricklaying, an Australian ` +
       `bricklaying and pressure cleaning business. Write professional, clear business summaries ` +
       `in plain Australian English. Today's date is included in the business data below.\n\n` +
       businessContext;
+  } else if (role === 'plan') {
+    maxTokens = 2048;
+    systemPrompt =
+      `You are a quantity surveyor and estimator for Dynasty Bricklaying, an Australian bricklaying ` +
+      `business. You will be given extracted text from a building plan or architectural drawing.\n\n` +
+      `Your job is to analyse the plan and produce a detailed bricklaying estimate. Follow these rules:\n` +
+      `- Identify all brick/block walls and calculate their area in m²\n` +
+      `- Assume standard brick size 230×76mm laid in stretcher bond unless stated otherwise\n` +
+      `- Bricks per m²: 50 (standard face brick)\n` +
+      `- Add 10% wastage to brick count\n` +
+      `- Mortar: 1 bag per 25 bricks (approx)\n` +
+      `- Wall ties: 1 per 0.5 m²\n` +
+      `- Crew productivity: 3 bricklayers laying 1,000 bricks/day combined\n` +
+      `- Quote rate: AUD $5.20 per brick (supply + lay, includes materials)\n\n` +
+      `Present your output in this exact format:\n` +
+      `WALL AREAS\n` +
+      `[List each wall/section with dimensions and m²]\n\n` +
+      `TOTAL AREA: X m²\n\n` +
+      `MATERIALS\n` +
+      `Bricks (inc. 10% wastage): X,XXX\n` +
+      `Mortar bags: XX\n` +
+      `Wall ties: XXX\n\n` +
+      `LABOUR\n` +
+      `Days on site (3-man crew): X days\n\n` +
+      `QUOTE PRICE: $XX,XXX\n\n` +
+      `NOTES\n` +
+      `[Any assumptions, exclusions, or flags about the plan]\n\n` +
+      `If the extracted text does not appear to be a building plan, say so clearly and ask for a clearer PDF.`;
   } else {
     systemPrompt =
       `You are Dynasty AI, a business assistant for Dynasty Bricklaying, an Australian bricklaying ` +
@@ -74,7 +104,7 @@ exports.handler = async (event) => {
       },
       body: JSON.stringify({
         model:      'claude-sonnet-4-6',
-        max_tokens: 1024,
+        max_tokens: maxTokens,
         system:     systemPrompt,
         messages,
       }),
