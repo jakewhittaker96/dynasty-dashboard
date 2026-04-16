@@ -10,7 +10,7 @@ const PIN_KEY             = 'dynasty-pin';
 const PORTAL_PIN_KEY      = 'dynasty-portal-pin';
 const ANTHROPIC_KEY_STORE = 'dynasty-anthropic-key';
 const BUILDER_PIN         = '7777';
-let currentFullPin        = localStorage.getItem(PIN_KEY)        || '1234';
+let currentFullPin        = localStorage.getItem(PIN_KEY)        || '0220';
 const PORTAL_PIN          = localStorage.getItem(PORTAL_PIN_KEY) || '9999';
 
 function isPortal()  { return sessionStorage.getItem('dynasty-mode') === 'portal'; }
