@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Dynasty Dashboard — Bricklaying Operations</title>
+  <title>Dynasty OS — Trade Business Dashboard</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
@@ -176,7 +176,7 @@
           </div>
           <div class="kpi-body">
             <div class="kpi-value" id="ovTotalBricks">—</div>
-            <div class="kpi-label">Total Bricks Today</div>
+            <div class="kpi-label" id="kpiLabelBricksOverview">Units Today</div>
           </div>
         </div>
 
@@ -220,9 +220,9 @@
       <!-- Job completion countdown (per site) -->
       <section id="completionCountdown"></section>
 
-      <!-- Weekly bricks trend chart -->
+      <!-- Weekly units trend chart -->
       <section class="weekly-trend-card" id="weeklyTrendSection">
-        <h2 class="card-title"><span class="card-title-icon">&#128200;</span> Weekly Bricks Trend</h2>
+        <h2 class="card-title" id="weeklyTrendTitle"><span class="card-title-icon">&#128200;</span> Weekly Units Trend</h2>
         <div class="chart-wrap chart-wrap--wide"><canvas id="chartWeeklyTrend"></canvas></div>
       </section>
 
@@ -270,7 +270,7 @@
           </div>
           <div class="kpi-body">
             <div class="kpi-value" id="kpiBricks">—</div>
-            <div class="kpi-label">Bricks / Blocks Today</div>
+            <div class="kpi-label" id="kpiLabelBricksSite">Units Today</div>
           </div>
           <div class="kpi-trend" id="kpiBricksTrend"></div>
         </div>
@@ -388,7 +388,7 @@
             <thead>
               <tr>
                 <th>Date</th>
-                <th>Bricks Today</th>
+                <th id="tableThUnits">Units Today</th>
                 <th>Running Total</th>
                 <th>Crew</th>
                 <th>Progress</th>
@@ -647,8 +647,25 @@
         <div class="settings-section-title">&#127970; Business Profile</div>
         <p class="settings-hint">Pre-fills your branding in AI-generated quote PDFs.</p>
         <div>
+          <label class="settings-label" for="bp_tradeType">Trade Type</label>
+          <select id="bp_tradeType" class="settings-input">
+            <option value="bricklayer">Bricklayer</option>
+            <option value="block_layer">Block Layer</option>
+            <option value="plasterer">Plasterer</option>
+            <option value="painter">Painter</option>
+            <option value="plumber">Plumber</option>
+            <option value="electrician">Electrician</option>
+            <option value="carpenter">Carpenter</option>
+            <option value="tiler">Tiler</option>
+            <option value="landscaper">Landscaper</option>
+            <option value="pressure_cleaner">Pressure Cleaner</option>
+            <option value="builder">Builder</option>
+            <option value="other">Other</option>
+          </select>
+        </div>
+        <div>
           <label class="settings-label" for="bp_name">Business Name</label>
-          <input id="bp_name" class="settings-input" placeholder="e.g. Dynasty Bricklaying" />
+          <input id="bp_name" class="settings-input" placeholder="e.g. Dynasty Trades" />
         </div>
         <div>
           <label class="settings-label" for="bp_abn">ABN</label>
@@ -739,7 +756,7 @@
               <label class="calc-label">Wall Height (m)</label>
               <input type="number" id="calcHeight" class="calc-input" value="2.4" min="0" step="0.1" />
             </div>
-            <div class="calc-field">
+            <div class="calc-field calc-brick-only">
               <label class="calc-label">Wall Thickness</label>
               <select id="calcThickness" class="calc-input">
                 <option value="single">Single Skin (110mm)</option>
@@ -747,7 +764,7 @@
                 <option value="block">Block (190mm)</option>
               </select>
             </div>
-            <div class="calc-field">
+            <div class="calc-field calc-brick-only">
               <label class="calc-label">Brick Type</label>
               <select id="calcBrickType" class="calc-input">
                 <option value="standard">Standard Brick (230×76×110)</option>
@@ -755,7 +772,7 @@
                 <option value="jumbo">Jumbo Brick (290×90×90)</option>
               </select>
             </div>
-            <div class="calc-field">
+            <div class="calc-field calc-brick-only">
               <label class="calc-label">Bond Pattern</label>
               <select id="calcBond" class="calc-input">
                 <option value="stretcher">Stretcher Bond</option>
@@ -763,7 +780,7 @@
                 <option value="english">English Bond</option>
               </select>
             </div>
-            <div class="calc-field">
+            <div class="calc-field calc-brick-only">
               <label class="calc-label">Mortar Joint (mm)</label>
               <input type="number" id="calcJoint" class="calc-input" value="10" min="5" max="15" step="1" />
             </div>
@@ -1049,7 +1066,24 @@
         <div class="subbie-form">
           <div class="subbie-form-row">
             <label class="calc-label">Business Name <span style="color:#e05252">*</span></label>
-            <input id="cf_businessName" class="calc-input" placeholder="e.g. Smith Bricklaying" />
+            <input id="cf_businessName" class="calc-input" placeholder="e.g. Smith Plumbing" />
+          </div>
+          <div class="subbie-form-row">
+            <label class="calc-label">Trade Type <span style="color:#e05252">*</span></label>
+            <select id="cf_tradeType" class="calc-input">
+              <option value="bricklayer">Bricklayer</option>
+              <option value="block_layer">Block Layer</option>
+              <option value="plasterer">Plasterer</option>
+              <option value="painter">Painter</option>
+              <option value="plumber">Plumber</option>
+              <option value="electrician">Electrician</option>
+              <option value="carpenter">Carpenter</option>
+              <option value="tiler">Tiler</option>
+              <option value="landscaper">Landscaper</option>
+              <option value="pressure_cleaner">Pressure Cleaner</option>
+              <option value="builder">Builder</option>
+              <option value="other">Other</option>
+            </select>
           </div>
           <div class="subbie-form-row">
             <label class="calc-label">Owner Name</label>
@@ -1057,7 +1091,7 @@
           </div>
           <div class="subbie-form-row">
             <label class="calc-label">Email Address <span style="color:#e05252">*</span></label>
-            <input id="cf_email" class="calc-input" type="email" placeholder="john@smithbricklaying.com.au" />
+            <input id="cf_email" class="calc-input" type="email" placeholder="john@smithtrades.com.au" />
           </div>
           <div class="subbie-form-row">
             <label class="calc-label">

@@ -747,17 +747,18 @@ function renderWeeklySummary(bySite) {
   const totalCrewSum = Object.values(crewByDate).reduce((s, v) => s + v, 0);
   const weekAvgCrew  = weekDays > 0 ? (totalCrewSum / weekDays).toFixed(1) : '—';
 
+  const _u = tradeUnit();
   dom.weeklySummary.innerHTML = `
     <div class="weekly-summary-card">
       <h2 class="card-title"><span class="card-title-icon">&#128200;</span> Weekly &amp; Monthly Summary</h2>
       <div class="summary-grid">
         <div class="summary-stat">
           <div class="summary-stat-value">${weekBricks.toLocaleString()}</div>
-          <div class="summary-stat-label">Bricks this week</div>
+          <div class="summary-stat-label">${_u.plural} this week</div>
         </div>
         <div class="summary-stat">
           <div class="summary-stat-value">${weekAvgBricks.toLocaleString()}</div>
-          <div class="summary-stat-label">Avg bricks / day this week</div>
+          <div class="summary-stat-label">Avg ${_u.lower} / day this week</div>
         </div>
         <div class="summary-stat">
           <div class="summary-stat-value">${busiestDay ? formatDateShort(busiestDay) : '—'}</div>
@@ -765,7 +766,7 @@ function renderWeeklySummary(bySite) {
         </div>
         <div class="summary-stat">
           <div class="summary-stat-value">${monthBricks.toLocaleString()}</div>
-          <div class="summary-stat-label">Total bricks this month</div>
+          <div class="summary-stat-label">Total ${_u.lower} this month</div>
         </div>
         <div class="summary-stat">
           <div class="summary-stat-value">${weekAvgCrew}</div>
@@ -790,17 +791,18 @@ function renderSiteAverages(rows) {
     ? (withCrew.reduce((s, r) => s + r.crew, 0) / withCrew.length).toFixed(1)
     : '—';
 
+  const _sa = tradeUnit();
   dom.siteAverages.innerHTML = `
     <div class="site-averages-card">
       <h2 class="card-title"><span class="card-title-icon">&#9650;</span> Job Averages</h2>
       <div class="site-averages-grid">
         <div class="summary-stat">
           <div class="summary-stat-value">${avgBricks.toLocaleString()}</div>
-          <div class="summary-stat-label">Avg bricks / day</div>
+          <div class="summary-stat-label">Avg ${_sa.lower} / day</div>
         </div>
         <div class="summary-stat">
           <div class="summary-stat-value">${totalBricks.toLocaleString()}</div>
-          <div class="summary-stat-label">Total bricks to date</div>
+          <div class="summary-stat-label">Total ${_sa.lower} to date</div>
         </div>
         <div class="summary-stat">
           <div class="summary-stat-value">${avgCrew}</div>
@@ -1008,7 +1010,7 @@ function renderCompletionCountdown(bySite) {
         </div>
         <div class="countdown-meta">
           ${daysLeft ? `<span>&#128197; ${daysLeft} day${daysLeft !== 1 ? 's' : ''} remaining</span>` : ''}
-          ${avgBricks ? `<span>&#9651; ${avgBricks.toLocaleString()} bricks/day avg</span>` : ''}
+          ${avgBricks ? `<span>&#9651; ${avgBricks.toLocaleString()} ${tradeUnit().perDay} avg</span>` : ''}
         </div>
       </div>`;
   });
@@ -1062,7 +1064,7 @@ function buildWeeklyTrendChart(bySite) {
     data: {
       labels,
       datasets: [{
-        label: 'Bricks laid',
+        label: `${tradeUnit().plural} recorded`,
         data,
         borderColor: '#c9a84c',
         borderWidth: 2.5,
@@ -1080,7 +1082,7 @@ function buildWeeklyTrendChart(bySite) {
     options: {
       ...JSON.parse(JSON.stringify(CHART_DEFAULTS)),
       plugins: { ...CHART_DEFAULTS.plugins, tooltip: { ...CHART_DEFAULTS.plugins.tooltip,
-        callbacks: { label: ctx => ` ${ctx.parsed.y.toLocaleString()} bricks` },
+        callbacks: { label: ctx => ` ${ctx.parsed.y.toLocaleString()} ${tradeUnit().lower}` },
       }},
       scales: { ...CHART_DEFAULTS.scales,
         y: { ...CHART_DEFAULTS.scales.y, min: 0,
@@ -1209,11 +1211,11 @@ function renderAllJobs(bySite) {
         <div class="site-card-stats">
           <div class="site-card-stat">
             <div class="site-card-stat-value">${latest.bricks ? latest.bricks.toLocaleString() : '—'}</div>
-            <div class="site-card-stat-label">Bricks today</div>
+            <div class="site-card-stat-label">${tradeUnit().plural} today</div>
           </div>
           <div class="site-card-stat">
             <div class="site-card-stat-value">${totalBricks.toLocaleString()}</div>
-            <div class="site-card-stat-label">Total bricks</div>
+            <div class="site-card-stat-label">Total ${tradeUnit().lower}</div>
           </div>
           <div class="site-card-stat">
             <div class="site-card-stat-value">${daysLeft || '—'}</div>
@@ -1307,7 +1309,7 @@ function buildCharts(rows) {
   chartBricks = new Chart($('chartBricks'), {
     type: 'bar',
     data: { labels, datasets: [{
-      label: 'Bricks Laid', data: bricks,
+      label: `${tradeUnit().plural} Recorded`, data: bricks,
       backgroundColor: ctx => {
         const c = ctx.chart;
         return c.chartArea ? goldGrad(c.ctx, c.chartArea) : 'rgba(201,168,76,0.5)';
@@ -1318,7 +1320,7 @@ function buildCharts(rows) {
     options: {
       ...JSON.parse(JSON.stringify(CHART_DEFAULTS)),
       plugins: { ...CHART_DEFAULTS.plugins, tooltip: { ...CHART_DEFAULTS.plugins.tooltip,
-        callbacks: { label: ctx => ` ${ctx.parsed.y.toLocaleString()} bricks` },
+        callbacks: { label: ctx => ` ${ctx.parsed.y.toLocaleString()} ${tradeUnit().lower}` },
       }},
     },
   });
@@ -1585,7 +1587,7 @@ function openSiteModal(siteName) {
       </div>
       <div class="modal-kpi">
         <div class="modal-kpi-value">${latest.bricks ? latest.bricks.toLocaleString() : '—'}</div>
-        <div class="modal-kpi-label">Bricks today</div>
+        <div class="modal-kpi-label">${tradeUnit().plural} today</div>
       </div>
       <div class="modal-kpi">
         <div class="modal-kpi-value">${latest.crew || '—'}</div>
@@ -1597,7 +1599,7 @@ function openSiteModal(siteName) {
       </div>
       <div class="modal-kpi">
         <div class="modal-kpi-value">${totalBricks.toLocaleString()}</div>
-        <div class="modal-kpi-label">Total bricks</div>
+        <div class="modal-kpi-label">Total ${tradeUnit().lower}</div>
       </div>
       ${weatherDays > 0 ? `
       <div class="modal-kpi modal-kpi--weather">
@@ -1618,7 +1620,7 @@ function openSiteModal(siteName) {
       <table class="data-table">
         <thead>
           <tr>
-            <th>Date</th><th>Bricks</th><th>Running Total</th><th>Crew</th>
+            <th>Date</th><th>${tradeUnit().plural}</th><th>Running Total</th><th>Crew</th>
             <th>What got done</th><th>Problems</th><th>Materials tomorrow</th>
           </tr>
         </thead>
@@ -1963,6 +1965,8 @@ setInterval(loadSheet, 5 * 60 * 1000);
   const container = document.getElementById('bizToggle');
   if (!container) return;
 
+  applyTradeLabels();
+
   // Reflect persisted state
   container.querySelectorAll('.biz-toggle-btn').forEach(btn => {
     btn.classList.toggle('biz-toggle-btn--active', btn.dataset.biz === activeBiz);
@@ -2081,6 +2085,61 @@ setInterval(loadSheet, 5 * 60 * 1000);
   }
 })();
 
+// ─── Trade type system ────────────────────────────────────────────────────────
+const TRADE_NAMES = {
+  bricklayer:       'Bricklaying',
+  block_layer:      'Block Laying',
+  plasterer:        'Plastering',
+  painter:          'Painting',
+  plumber:          'Plumbing',
+  electrician:      'Electrical',
+  carpenter:        'Carpentry',
+  tiler:            'Tiling',
+  landscaper:       'Landscaping',
+  pressure_cleaner: 'Pressure Cleaning',
+  builder:          'Building',
+  other:            'Trade Work',
+};
+const TRADE_UNITS = {
+  bricklayer:       { singular: 'Brick',  plural: 'Bricks',  lower: 'bricks',  perDay: 'bricks/day' },
+  block_layer:      { singular: 'Block',  plural: 'Blocks',  lower: 'blocks',  perDay: 'blocks/day' },
+  plasterer:        { singular: 'Bag',    plural: 'Bags',    lower: 'bags',    perDay: 'bags/day'   },
+  painter:          { singular: 'Litre',  plural: 'Litres',  lower: 'litres',  perDay: 'litres/day' },
+  plumber:          { singular: 'Unit',   plural: 'Units',   lower: 'units',   perDay: 'units/day'  },
+  electrician:      { singular: 'Unit',   plural: 'Units',   lower: 'units',   perDay: 'units/day'  },
+  carpenter:        { singular: 'Unit',   plural: 'Units',   lower: 'units',   perDay: 'units/day'  },
+  tiler:            { singular: 'Tile',   plural: 'Tiles',   lower: 'tiles',   perDay: 'tiles/day'  },
+  landscaper:       { singular: 'Unit',   plural: 'Units',   lower: 'units',   perDay: 'units/day'  },
+  pressure_cleaner: { singular: 'm²',     plural: 'm²',      lower: 'm²',      perDay: 'm²/day'     },
+  builder:          { singular: 'Unit',   plural: 'Units',   lower: 'units',   perDay: 'units/day'  },
+  other:            { singular: 'Unit',   plural: 'Units',   lower: 'units',   perDay: 'units/day'  },
+};
+
+function getTradeType() {
+  try {
+    const bp = JSON.parse(localStorage.getItem('dynasty-business-profile') || '{}');
+    return bp.tradeType || 'bricklayer';
+  } catch { return 'bricklayer'; }
+}
+function tradeUnit()   { return TRADE_UNITS[getTradeType()] || TRADE_UNITS.other; }
+function tradeName()   { return TRADE_NAMES[getTradeType()] || 'Trade Work'; }
+function isBricklayerTrade() {
+  const t = getTradeType();
+  return t === 'bricklayer' || t === 'block_layer';
+}
+
+function applyTradeLabels() {
+  const u = tradeUnit();
+  const el = id => document.getElementById(id);
+  if (el('kpiLabelBricksOverview')) el('kpiLabelBricksOverview').textContent = `${u.plural} Today`;
+  if (el('kpiLabelBricksSite'))     el('kpiLabelBricksSite').textContent     = `${u.plural} Today`;
+  if (el('tableThUnits'))           el('tableThUnits').textContent           = `${u.plural} Today`;
+  const trendTitle = el('weeklyTrendTitle');
+  if (trendTitle) trendTitle.innerHTML = `<span class="card-title-icon">&#128200;</span> Weekly ${u.plural} Trend`;
+  const bizBtn = document.querySelector('.biz-toggle-btn[data-biz="bricklaying"]');
+  if (bizBtn) bizBtn.textContent = tradeName();
+}
+
 // ─── Business Profile ─────────────────────────────────────────────────────────
 const BP_KEY = 'dynasty-business-profile';
 
@@ -2106,6 +2165,8 @@ function saveBusinessProfile(obj) { localStorage.setItem(BP_KEY, JSON.stringify(
       const el = document.getElementById('bp_' + k);
       if (el) el.value = p[k] || '';
     });
+    const ttEl = document.getElementById('bp_tradeType');
+    if (ttEl) ttEl.value = p.tradeType || 'bricklayer';
     if (p.logo && logoCanvas) {
       showLogoPreview(p.logo);
     }
@@ -2145,15 +2206,17 @@ function saveBusinessProfile(obj) { localStorage.setItem(BP_KEY, JSON.stringify(
 
   saveBtn.addEventListener('click', () => {
     const p = {
-      name:    document.getElementById('bp_name')?.value.trim()    || '',
-      abn:     document.getElementById('bp_abn')?.value.trim()     || '',
-      phone:   document.getElementById('bp_phone')?.value.trim()   || '',
-      email:   document.getElementById('bp_email')?.value.trim()   || '',
-      address: document.getElementById('bp_address')?.value.trim() || '',
-      terms:   document.getElementById('bp_terms')?.value.trim()   || '',
-      logo:    logoCanvas?._dataUrl || loadBusinessProfile().logo   || '',
+      name:      document.getElementById('bp_name')?.value.trim()      || '',
+      abn:       document.getElementById('bp_abn')?.value.trim()       || '',
+      phone:     document.getElementById('bp_phone')?.value.trim()     || '',
+      email:     document.getElementById('bp_email')?.value.trim()     || '',
+      address:   document.getElementById('bp_address')?.value.trim()   || '',
+      terms:     document.getElementById('bp_terms')?.value.trim()     || '',
+      tradeType: document.getElementById('bp_tradeType')?.value        || 'bricklayer',
+      logo:      logoCanvas?._dataUrl || loadBusinessProfile().logo    || '',
     };
     saveBusinessProfile(p);
+    applyTradeLabels();
     if (profileMsg) {
       profileMsg.textContent = 'Profile saved!';
       profileMsg.className   = 'settings-msg settings-msg--ok';
