@@ -16,8 +16,9 @@ const XERO_API       = 'https://api.xero.com/api.xro/2.0';
 
 const SCOPES = [
   'openid', 'profile', 'email', 'offline_access',
-  'accounting.transactions',
+  'accounting.transactions.read',
   'accounting.contacts.read',
+  'accounting.reports.read',
   'accounting.settings.read',
 ].join(' ');
 
