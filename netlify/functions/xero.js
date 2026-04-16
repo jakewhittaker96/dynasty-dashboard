@@ -15,11 +15,10 @@ const XERO_CONN_URL  = 'https://api.xero.com/connections';
 const XERO_API       = 'https://api.xero.com/api.xro/2.0';
 
 const SCOPES = [
-  'openid', 'profile', 'email',
+  'openid', 'profile', 'email', 'offline_access',
   'accounting.transactions',
-  'accounting.contacts',
-  'accounting.reports.read',
-  'offline_access',
+  'accounting.contacts.read',
+  'accounting.settings.read',
 ].join(' ');
 
 // ─── CORS headers ─────────────────────────────────────────────────────────────
