@@ -4958,6 +4958,216 @@ textarea.calc-input { resize: vertical; font-family: inherit; }
   padding: 1rem 0;
 }
 
+/* =============================================
+   MOBILE RESPONSIVENESS — 768px
+   Extends / overrides the earlier 768px block.
+   Desktop styles are untouched.
+   ============================================= */
+@media (max-width: 768px) {
+
+  /* ── 1. HEADER — two-row layout ────────────────────────────────────────────
+     Row 1: logo (left)  +  settings & refresh (pinned top-right)
+     Row 2: biz-toggle buttons + action buttons (full width)
+  ─────────────────────────────────────────────────────────────────────────── */
+  .header-inner {
+    position: relative;
+    min-height: 56px;
+    height: auto;
+    /* Right padding reserves space so the logo never slides under the icons */
+    padding: 0.5rem 5.5rem 0 1rem;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 0;
+  }
+  .brand {
+    flex: 1 0 auto;
+    padding-top: 0.4rem;
+    padding-bottom: 0.3rem;
+  }
+  /* Pin settings + refresh to top-right of row 1 */
+  .btn-settings {
+    position: absolute;
+    top: 0.65rem;
+    right: 3.25rem;
+  }
+  .btn-refresh {
+    position: absolute;
+    top: 0.65rem;
+    right: 0.65rem;
+  }
+  /* Row 2: header-right drops to its own full-width line */
+  .header-right {
+    flex: 0 0 100%;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    padding: 0.3rem 0 0.4rem;
+    /* Remove the pinned buttons from the flex flow */
+    /* (they are absolutely positioned so already out of flow) */
+  }
+
+  /* ── 2. HEADER BUTTONS ─────────────────────────────────────────────────────
+     Hide Calculate and Read Plan — too many buttons on small screen.
+     Keep Summary (→ row 2 left) and Quote (→ row 2 right, gold).
+  ─────────────────────────────────────────────────────────────────────────── */
+  #btnCalculate,
+  #btnReadPlan {
+    display: none;
+  }
+  .btn-header-action {
+    font-size: 0.72rem;
+    padding: 4px 10px;
+  }
+  .btn-header-action--gold {
+    font-size: 0.72rem;
+    padding: 4px 10px;
+  }
+
+  /* ── 3. TAB BAR — right-edge fade hint ────────────────────────────────────
+     Scrollbar already hidden globally. Add a gradient fade on the right
+     edge so the user knows more tabs are scrollable.
+  ─────────────────────────────────────────────────────────────────────────── */
+  .tab-nav {
+    overflow: hidden; /* clip the ::after to the nav bounds */
+  }
+  .tab-nav::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 2.5rem;
+    background: linear-gradient(to right, transparent, #0a0a0a);
+    pointer-events: none;
+    z-index: 1;
+  }
+  /* Ensure tabs stay at z-index 0 so the fade renders on top */
+  .tab-bar {
+    position: relative;
+    z-index: 0;
+  }
+
+  /* ── 4. KPI STAT CARDS ─────────────────────────────────────────────────────
+     Tighter labels so they don't wrap; slightly larger numbers.
+  ─────────────────────────────────────────────────────────────────────────── */
+  .kpi-label {
+    font-size: 0.58rem;
+  }
+  .kpi-value {
+    font-size: 1.8rem;
+  }
+
+  /* ── 5. SITE CARDS ─────────────────────────────────────────────────────────
+     Already 1-column from earlier rule. Stat row: always 3 columns.
+     Tighten label text so it never wraps.
+  ─────────────────────────────────────────────────────────────────────────── */
+  .site-card-stats {
+    grid-template-columns: repeat(3, 1fr);
+  }
+  .site-card-stat-label {
+    font-size: 0.52rem;
+  }
+  .site-card-stat-value {
+    font-size: 0.95rem;
+  }
+
+  /* ── 6. JOBS TABLE — hide Address column ───────────────────────────────────
+     Address is the 3rd <th>/<td> in every row.
+  ─────────────────────────────────────────────────────────────────────────── */
+  #jobsTable th:nth-child(3),
+  #jobsTable td:nth-child(3) {
+    display: none;
+  }
+  /* Smaller status & payment badges */
+  .job-status-badge,
+  .payment-badge {
+    font-size: 0.62rem;
+    padding: 0.18rem 0.4rem;
+    letter-spacing: 0;
+  }
+
+  /* ── 7. SCHEDULE TAB ───────────────────────────────────────────────────────
+     2-column grid already handled at 600px. Just tighten card text.
+  ─────────────────────────────────────────────────────────────────────────── */
+  .scal-card-title {
+    font-size: 0.78rem;
+  }
+  .scal-card-crew,
+  .scal-card-note {
+    font-size: 0.68rem;
+  }
+  .scal-day-name {
+    font-size: 0.6rem;
+  }
+  .scal-day-date {
+    font-size: 0.72rem;
+  }
+  .scal-week-label {
+    font-size: 0.82rem;
+  }
+
+  /* ── 8. BUILDER WATERMARK — hide on mobile ─────────────────────────────────
+     Fixed bottom-right position covers content on small screens.
+  ─────────────────────────────────────────────────────────────────────────── */
+  .portal-watermark--builder {
+    display: none;
+  }
+
+  /* ── 9. AI CHAT ─────────────────────────────────────────────────────────────
+     Bubble: slightly smaller, snug to corner.
+     Panel: full available width.
+  ─────────────────────────────────────────────────────────────────────────── */
+  .ai-chat-bubble {
+    width: 46px;
+    height: 46px;
+    font-size: 1.2rem;
+    bottom: 1rem;
+    right: 1rem;
+  }
+  .ai-chat-panel {
+    width: calc(100vw - 2rem);
+    right: 1rem;
+    left: 1rem;
+    bottom: 4.5rem;
+    max-height: 70vh;
+  }
+
+  /* ── 10. MODALS ─────────────────────────────────────────────────────────────
+     Slide up from bottom edge: full width, capped height, scrollable.
+  ─────────────────────────────────────────────────────────────────────────── */
+  /* Settings overlay + modal */
+  .settings-overlay {
+    padding: 0;
+    align-items: flex-end;
+  }
+  .settings-modal {
+    width: 100%;
+    max-width: 100%;
+    max-height: 85vh;
+    overflow-y: auto;
+    border-radius: var(--radius) var(--radius) 0 0;
+  }
+  .settings-body {
+    padding: 1rem;
+  }
+
+  /* AI modals (weekly summary, calculator, plan reader, quote) */
+  .ai-modal-overlay {
+    padding: 0;
+    align-items: flex-end;
+  }
+  .ai-modal,
+  .ai-modal--wide {
+    width: 100%;
+    max-width: 100%;
+    max-height: 85vh;
+    overflow-y: auto;
+    border-radius: var(--radius) var(--radius) 0 0;
+  }
+  .ai-modal-body {
+    padding: 1rem;
+  }
+}
+
 /* Xero badge on Jobs table rows */
 .xero-badge {
   display: inline-flex;
