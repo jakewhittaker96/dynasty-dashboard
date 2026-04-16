@@ -90,15 +90,17 @@ exports.handler = async (event) => {
 function handleAuth() {
   if (!CLIENT_ID) return bad('XERO_CLIENT_ID is not configured', 500);
 
-  const params = new URLSearchParams({
-    response_type: 'code',
-    client_id:     CLIENT_ID,
-    redirect_uri:  REDIRECT_URI,
-    scope:         SCOPES,
-    state:         'xero',
-  });
+  // Build URL manually so spaces in scope are encoded as %20 (not +).
+  // Xero rejects scope values that use + encoding.
+  const url =
+    `${XERO_AUTH_URL}` +
+    `?response_type=code` +
+    `&client_id=${encodeURIComponent(CLIENT_ID)}` +
+    `&redirect_uri=${encodeURIComponent(REDIRECT_URI)}` +
+    `&scope=${encodeURIComponent(SCOPES)}` +
+    `&state=xero`;
 
-  return ok({ url: `${XERO_AUTH_URL}?${params.toString()}` });
+  return ok({ url });
 }
 
 // ─── 2. Exchange authorization code for tokens ────────────────────────────────
