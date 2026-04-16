@@ -176,7 +176,7 @@
           </div>
           <div class="kpi-body">
             <div class="kpi-value" id="ovTotalBricks">—</div>
-            <div class="kpi-label">Total Bricks Today</div>
+            <div class="kpi-label" id="kpiLabelBricksOverview">Total Bricks Today</div>
           </div>
         </div>
 
@@ -646,6 +646,23 @@
         <div class="settings-divider"></div>
         <div class="settings-section-title">&#127970; Business Profile</div>
         <p class="settings-hint">Pre-fills your branding in AI-generated quote PDFs.</p>
+        <div>
+          <label class="settings-label" for="bp_tradeType">Trade Type</label>
+          <select id="bp_tradeType" class="settings-input">
+            <option value="bricklayer">Bricklayer</option>
+            <option value="block_layer">Block Layer</option>
+            <option value="plasterer">Plasterer</option>
+            <option value="painter">Painter</option>
+            <option value="plumber">Plumber</option>
+            <option value="electrician">Electrician</option>
+            <option value="carpenter">Carpenter</option>
+            <option value="tiler">Tiler</option>
+            <option value="landscaper">Landscaper</option>
+            <option value="pressure_cleaner">Pressure Cleaner</option>
+            <option value="builder">Builder</option>
+            <option value="other">Other</option>
+          </select>
+        </div>
         <div>
           <label class="settings-label" for="bp_name">Business Name</label>
           <input id="bp_name" class="settings-input" placeholder="e.g. Dynasty Bricklaying" />

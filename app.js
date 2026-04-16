@@ -2317,3 +2317,16 @@ function getCrewNames() {
 // ─── Start ────────────────────────────────────────────────────────────────────
 _initModalOverlayClick();
 loadSheet();
+
+// ─── Trade-aware KPI label (standalone — no data-loading side effects) ────────
+(function updateTradeLabelOnce() {
+  try {
+    const bp        = JSON.parse(localStorage.getItem('dynasty-business-profile') || '{}');
+    const tradeType = bp.tradeType || 'bricklayer';
+    const el        = document.getElementById('kpiLabelBricksOverview');
+    if (!el) return;
+    el.textContent  = (tradeType === 'bricklayer' || tradeType === 'block_layer')
+      ? 'Total Bricks Today'
+      : 'Units Today';
+  } catch (_) {}
+})();
