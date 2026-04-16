@@ -2106,6 +2106,8 @@ function saveBusinessProfile(obj) { localStorage.setItem(BP_KEY, JSON.stringify(
       const el = document.getElementById('bp_' + k);
       if (el) el.value = p[k] || '';
     });
+    const ttEl = document.getElementById('bp_tradeType');
+    if (ttEl) ttEl.value = p.tradeType || 'bricklayer';
     if (p.logo && logoCanvas) {
       showLogoPreview(p.logo);
     }
@@ -2145,15 +2147,17 @@ function saveBusinessProfile(obj) { localStorage.setItem(BP_KEY, JSON.stringify(
 
   saveBtn.addEventListener('click', () => {
     const p = {
-      name:    document.getElementById('bp_name')?.value.trim()    || '',
-      abn:     document.getElementById('bp_abn')?.value.trim()     || '',
-      phone:   document.getElementById('bp_phone')?.value.trim()   || '',
-      email:   document.getElementById('bp_email')?.value.trim()   || '',
-      address: document.getElementById('bp_address')?.value.trim() || '',
-      terms:   document.getElementById('bp_terms')?.value.trim()   || '',
-      logo:    logoCanvas?._dataUrl || loadBusinessProfile().logo   || '',
+      name:      document.getElementById('bp_name')?.value.trim()      || '',
+      abn:       document.getElementById('bp_abn')?.value.trim()       || '',
+      phone:     document.getElementById('bp_phone')?.value.trim()     || '',
+      email:     document.getElementById('bp_email')?.value.trim()     || '',
+      address:   document.getElementById('bp_address')?.value.trim()   || '',
+      terms:     document.getElementById('bp_terms')?.value.trim()     || '',
+      tradeType: document.getElementById('bp_tradeType')?.value        || 'bricklayer',
+      logo:      logoCanvas?._dataUrl || loadBusinessProfile().logo    || '',
     };
     saveBusinessProfile(p);
+    applyTradeLabels();
     if (profileMsg) {
       profileMsg.textContent = 'Profile saved!';
       profileMsg.className   = 'settings-msg settings-msg--ok';
@@ -2318,15 +2322,44 @@ function getCrewNames() {
 _initModalOverlayClick();
 loadSheet();
 
-// ─── Trade-aware KPI label (standalone — no data-loading side effects) ────────
-(function updateTradeLabelOnce() {
+// ─── Trade label helpers (label-only, no data/rendering side effects) ────────
+const TRADE_DISPLAY_NAMES = {
+  bricklayer:       'Bricklaying',
+  block_layer:      'Block Laying',
+  plasterer:        'Plastering',
+  painter:          'Painting',
+  plumber:          'Plumbing',
+  electrician:      'Electrical',
+  carpenter:        'Carpentry',
+  tiler:            'Tiling',
+  landscaper:       'Landscaping',
+  pressure_cleaner: 'Pressure Cleaning',
+  builder:          'Building',
+  other:            'Trade Work',
+};
+
+function applyTradeLabels() {
   try {
     const bp        = JSON.parse(localStorage.getItem('dynasty-business-profile') || '{}');
     const tradeType = bp.tradeType || 'bricklayer';
-    const el        = document.getElementById('kpiLabelBricksOverview');
-    if (!el) return;
-    el.textContent  = (tradeType === 'bricklayer' || tradeType === 'block_layer')
-      ? 'Total Bricks Today'
-      : 'Units Today';
+    const isBrick   = tradeType === 'bricklayer' || tradeType === 'block_layer';
+
+    // Overview KPI label
+    const kpiEl = document.getElementById('kpiLabelBricksOverview');
+    if (kpiEl) kpiEl.textContent = isBrick ? 'Total Bricks Today' : 'Units Today';
+
+    // Biz toggle button
+    const bizBtn = document.querySelector('.biz-toggle-btn[data-biz="bricklaying"]');
+    if (bizBtn) bizBtn.textContent = TRADE_DISPLAY_NAMES[tradeType] || 'Trade Work';
+
+    // Site card stat labels — DOM scan only, no rendering logic touched
+    if (!isBrick) {
+      document.querySelectorAll('.site-card-stat-label').forEach(el => {
+        if (el.textContent === 'Bricks today')  el.textContent = 'Units today';
+        if (el.textContent === 'Total bricks')  el.textContent = 'Total units';
+      });
+    }
   } catch (_) {}
-})();
+}
+
+applyTradeLabels();
