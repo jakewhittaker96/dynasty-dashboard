@@ -529,6 +529,10 @@
         <div class="sm8-section-label">Payroll Estimator</div>
         <div id="financePayroll"></div>
 
+        <!-- Xero Financial Data (shown when connected) -->
+        <div class="sm8-section-label" id="xeroFinanceSectionLabel" hidden>&#128178; Xero Financial Data</div>
+        <div id="xeroFinancePanel" hidden></div>
+
       </section>
 
     </div><!-- /#viewFinance -->
@@ -705,6 +709,15 @@
           <div class="settings-section-title">&#128101; Client Manager</div>
           <p class="settings-hint">Add and manage client accounts, API keys, and access.</p>
           <button class="settings-save-btn settings-save-btn--secondary" id="btnManageClients">&#128101; View All Clients</button>
+        </div>
+
+        <div class="settings-divider"></div>
+        <div class="settings-section-title">&#128178; Xero Accounting</div>
+        <p class="settings-hint" id="xeroSettingsHint">Sync invoices, payments and bank data from Xero.</p>
+        <button class="settings-save-btn settings-save-btn--gold" id="btnConnectXero">&#128279; Connect Xero</button>
+        <div id="xeroConnectedStatus" hidden>
+          <div class="xero-connected-badge">&#10003; Connected to <span id="xeroOrgName">Xero</span></div>
+          <button class="settings-save-btn settings-save-btn--secondary" id="btnDisconnectXero">Disconnect</button>
         </div>
 
         <div class="settings-divider"></div>
@@ -1152,5 +1165,6 @@
   <script src="schedule.js"></script>
   <script src="quotegen.js"></script>
   <script src="clients.js"></script>
+  <script src="xero.js"></script>
 </body>
 </html>

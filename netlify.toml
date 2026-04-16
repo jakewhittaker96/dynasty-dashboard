@@ -17,3 +17,8 @@
   from   = "/api/chat"
   to     = "/.netlify/functions/chat"
   status = 200
+
+[[redirects]]
+  from   = "/api/xero/*"
+  to     = "/.netlify/functions/xero"
+  status = 200
