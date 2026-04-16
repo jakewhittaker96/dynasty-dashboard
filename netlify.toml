@@ -14,11 +14,6 @@
   status = 200
 
 [[redirects]]
-  from   = "/landing.html"
-  to     = "/"
-  status = 301
-
-[[redirects]]
   from   = "/api/chat"
   to     = "/.netlify/functions/chat"
   status = 200
