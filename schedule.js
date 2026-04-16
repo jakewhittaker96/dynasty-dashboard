@@ -43,9 +43,6 @@ function schedMonWeek(dateStr) {
 let schedWeekStart = schedMonWeek(schedDateStr(new Date()));
 
 // ── Fetch SM8 data for schedule ───────────────────────────────────────────────
-// Always fetches jobactivity.json fresh — never relies on the Jobs tab state,
-// because sm8Activities in app.js can be null if that tab hasn't loaded yet,
-// which caused all jobs to fall back to job.date (the creation date = "today").
 async function loadSchedSM8() {
   try {
     const [jobsRes, actsRes, coRes] = await Promise.allSettled([
@@ -56,17 +53,27 @@ async function loadSchedSM8() {
 
     if (jobsRes.status === 'fulfilled') {
       const allJobs = jobsRes.value;
-      // Full map for activity lookups (any status)
       schedSM8AllJobsMap = new Map(allJobs.map(j => [j.uuid, j]));
-      // Filtered list for the SM8 badge count
       schedSM8Jobs = allJobs.filter(j => j.active === 1 &&
         (j.status === 'Work Order' || j.status === 'Quote'));
+    } else {
+      console.warn('[Schedule] job.json failed:', jobsRes.reason);
     }
 
     if (actsRes.status === 'fulfilled') {
-      schedSM8Activities = actsRes.value;
-      console.log('[Schedule] SM8 activities loaded:', schedSM8Activities.length,
-        '— unique dates:', new Set(schedSM8Activities.map(a => (a.date || '').slice(0,10))).size);
+      const raw = actsRes.value;
+      // Log raw response so we can diagnose the format
+      console.log('[Schedule] jobactivity.json raw sample (first 3):', JSON.stringify(raw.slice(0, 3)));
+      console.log('[Schedule] jobactivity.json total records:', raw.length);
+
+      // Only use activities if they have date fields — otherwise treat as empty
+      const validActs = raw.filter(a => a.job_uuid && a.date &&
+        /^\d{4}-\d{2}-\d{2}/.test(String(a.date)));
+      console.log('[Schedule] valid activities (have job_uuid + date):', validActs.length);
+      schedSM8Activities = validActs;
+    } else {
+      console.warn('[Schedule] jobactivity.json failed:', actsRes.reason);
+      schedSM8Activities = [];
     }
 
     if (coRes.status === 'fulfilled') {
@@ -76,42 +83,34 @@ async function loadSchedSM8() {
       }
     }
   } catch (err) {
-    console.warn('[Schedule] SM8 fetch failed:', err.message);
+    console.warn('[Schedule] SM8 fetch error:', err.message);
   }
   schedSM8Loaded = true;
 }
 
+// ── Next N business days from a start date (Mon–Fri, skips weekends) ──────────
+function schedNextBusinessDays(startDateStr, count) {
+  const dates = [];
+  const d = new Date(startDateStr + 'T12:00:00');
+  while (dates.length < count) {
+    const dow = d.getDay();
+    if (dow !== 0 && dow !== 6) dates.push(schedDateStr(d)); // skip Sun/Sat
+    d.setDate(d.getDate() + 1);
+  }
+  return dates;
+}
+
 // ── Build SM8 card data keyed by date ─────────────────────────────────────────
-// Returns Map<YYYY-MM-DD, [card]> where each card represents one job on that day.
-// Multiple activity records for the same job+date (different staff) are grouped
-// into a single card with a crew count.
+// Strategy:
+//  1. If jobactivity.json returned valid records → use those (accurate dates,
+//     grouped by job+day with crew count).
+//  2. Otherwise fall back to job.date field:
+//     - Work Orders → start date + next 4 business days (5 days total)
+//     - Quotes       → start date only (single-day placeholder)
 function buildSM8CardsByDate() {
   const byDate = new Map();
 
-  // Group activities by "job_uuid::date"
-  // groups Map: key → { job, date, crewCount, times[] }
-  const groups = new Map();
-
-  for (const act of schedSM8Activities) {
-    if (!act.job_uuid || !act.date) continue;
-    const date = act.date.substring(0, 10);
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) continue;
-
-    const job = schedSM8AllJobsMap.get(act.job_uuid);
-    if (!job) continue; // no matching job record — skip
-
-    const key = `${act.job_uuid}::${date}`;
-    if (!groups.has(key)) {
-      groups.set(key, { job, date, crewCount: 0, times: [] });
-    }
-    const g = groups.get(key);
-    g.crewCount++;
-    if (act.start_time) g.times.push(act.start_time.substring(0, 5));
-  }
-
-  // Convert groups into calendar cards
-  for (const g of groups.values()) {
-    const { job, date, crewCount, times } = g;
+  const makeCard = (job, date, extra = {}) => {
     const card = {
       uuid:      job.uuid,
       client:    schedSM8CompanyMap.get(job.company_uuid || '') || job.generated_job_no || '—',
@@ -119,15 +118,64 @@ function buildSM8CardsByDate() {
       addr:      (job.job_address || '').trim().slice(0, 45) || '',
       amt:       parseFloat(job.total_invoice_amount || 0),
       status:    job.status || 'Work Order',
-      time:      times.length ? [...new Set(times)].sort()[0] : '',
-      crewCount,
+      time:      '',
+      crewCount: 0,
+      ...extra,
     };
     if (!byDate.has(date)) byDate.set(date, []);
     byDate.get(date).push(card);
+  };
+
+  // ── Path 1: jobactivity records available ────────────────────────────────
+  if (schedSM8Activities.length > 0) {
+    const groups = new Map(); // "uuid::date" → { job, date, crewCount, times[] }
+
+    for (const act of schedSM8Activities) {
+      const date = String(act.date).substring(0, 10);
+      const job  = schedSM8AllJobsMap.get(act.job_uuid);
+      if (!job) continue;
+
+      const key = `${act.job_uuid}::${date}`;
+      if (!groups.has(key)) groups.set(key, { job, date, crewCount: 0, times: [] });
+      const g = groups.get(key);
+      g.crewCount++;
+      if (act.start_time) g.times.push(String(act.start_time).substring(0, 5));
+    }
+
+    for (const { job, date, crewCount, times } of groups.values()) {
+      makeCard(job, date, {
+        time:      times.length ? [...new Set(times)].sort()[0] : '',
+        crewCount,
+      });
+    }
+
+    console.log('[Schedule] Using activity-based dates. Cards placed on',
+      byDate.size, 'distinct dates.');
+
+  } else {
+    // ── Path 2: fall back to job.date spanning ────────────────────────────
+    console.log('[Schedule] jobactivity empty — falling back to job.date spanning.');
+
+    for (const job of schedSM8Jobs) {
+      const raw = String(job.date || '').substring(0, 10);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) continue;
+
+      if (job.status === 'Work Order') {
+        // Spread across start date + next 4 business days
+        const dates = schedNextBusinessDays(raw, 5);
+        for (const d of dates) makeCard(job, d);
+      } else {
+        // Quote — single day only
+        makeCard(job, raw);
+      }
+    }
+
+    console.log('[Schedule] Fallback cards placed across', byDate.size, 'dates,',
+      schedSM8Jobs.length, 'jobs total.');
   }
 
-  // Sort each day's cards: by time (earliest first), then by client name
-  for (const [, cards] of byDate) {
+  // Sort each day's cards: time first, then client name
+  for (const cards of byDate.values()) {
     cards.sort((a, b) => {
       if (a.time && b.time) return a.time.localeCompare(b.time);
       if (a.time) return -1;
