@@ -2064,6 +2064,21 @@ setInterval(loadSheet, 5 * 60 * 1000);
   [currentInp, newInp, confirmInp].forEach(inp =>
     inp.addEventListener('keydown', e => { if (e.key === 'Enter') savePin(); })
   );
+
+  const logoutBtn = document.getElementById('btnLogout');
+  if (logoutBtn) {
+    logoutBtn.addEventListener('click', () => {
+      sessionStorage.clear();
+      closeSettings();
+      const dashboard = document.getElementById('dashboardRoot');
+      const loginScreen = document.getElementById('loginScreen');
+      if (dashboard)   dashboard.hidden = true;
+      if (loginScreen) loginScreen.style.display = '';
+      // Reset pin input
+      const pinInput = document.getElementById('pinInput');
+      if (pinInput) { pinInput.value = ''; setTimeout(() => pinInput.focus(), 50); }
+    });
+  }
 })();
 
 // ─── Business Profile ─────────────────────────────────────────────────────────

@@ -439,8 +439,8 @@ body {
   letter-spacing: -0.02em;
 }
 .jobs-revenue-value--completed   { color: #22c55e; }
-.jobs-revenue-value--quote       { color: #60a5fa; }
-.jobs-revenue-value--outstanding { color: #C9A84C; }
+.jobs-revenue-value--quote       { color: #F0F0F0; }
+.jobs-revenue-value--outstanding { color: #F0F0F0; }
 .jobs-revenue-value--projected   { color: #C9A84C; font-size: 2.5rem; font-weight: 800; text-shadow: 0 0 30px rgba(201,168,76,0.2); }
 .jobs-revenue-value--dim         { color: #555; }
 
@@ -1465,12 +1465,10 @@ body {
 .site-footer {
   text-align: center;
   padding: 1.5rem 1.25rem;
-  font-size: 0.72rem;
-  color: var(--text-dim);
-  letter-spacing: 0.05em;
+  font-size: 0.75rem;
+  color: #333;
   border-top: 1px solid var(--border-dim);
 }
-.footer-sep { margin: 0 0.5rem; }
 
 /* =============================================
    LOADING STATE
@@ -1590,7 +1588,7 @@ body {
 
 /* Revenue card value colours for paid/unpaid */
 .jobs-revenue-value--paid   { color: var(--green); }
-.jobs-revenue-value--unpaid { color: var(--gold); }
+.jobs-revenue-value--unpaid { color: #ef4444; }
 
 /* =============================================
    RESPONSIVE — MOBILE FIRST
@@ -1713,7 +1711,7 @@ body {
 }
 
 .login-card {
-  background: rgba(15, 15, 15, 0.9);
+  background: rgba(15, 15, 15, 0.95);
   border: 1px solid #1e1e1e;
   border-radius: 16px;
   padding: 2.75rem 2.25rem;
@@ -1730,13 +1728,17 @@ body {
 
 .login-logo {
   margin-bottom: 0.75rem;
+  display: flex;
+  justify-content: center;
 }
 
+.login-logo svg { width: 220px; height: auto; }
+
 .login-subtitle {
-  font-size: 0.7rem;
-  letter-spacing: 0.16em;
+  font-size: 0.68rem;
+  letter-spacing: 0.18em;
   text-transform: uppercase;
-  color: var(--text-dim);
+  color: #444;
   margin-bottom: 2rem;
   font-weight: 500;
 }
@@ -1750,11 +1752,11 @@ body {
 }
 
 .login-label {
-  font-size: 0.72rem;
-  font-weight: 700;
+  font-size: 0.7rem;
+  font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--text-muted);
+  color: #555;
   align-self: flex-start;
 }
 
@@ -1764,9 +1766,9 @@ body {
   border: 1px solid #2a2a2a;
   border-radius: 8px;
   color: #fff;
-  font-size: 1.5rem;
+  font-size: 2rem;
   font-weight: 700;
-  letter-spacing: 0.3em;
+  letter-spacing: 0.5em;
   text-align: center;
   padding: 0.85rem 1rem;
   outline: none;
@@ -1777,11 +1779,19 @@ body {
   border-color: rgba(201, 168, 76, 0.4);
   box-shadow: 0 0 0 3px rgba(201, 168, 76, 0.08);
 }
-.login-pin::placeholder { color: #333; letter-spacing: 0.3em; }
+.login-pin::placeholder { color: #2a2a2a; letter-spacing: 0.5em; }
+
+/* Client login email/password — smaller letter spacing */
+.login-pin[type="email"],
+.login-pin[type="password"][id="clientPasswordInput"] {
+  font-size: 0.95rem;
+  font-weight: 400;
+  letter-spacing: 0.02em;
+}
 
 .login-btn {
   width: 100%;
-  padding: 0.85rem;
+  padding: 0.9rem;
   font-size: 0.85rem;
   font-weight: 700;
   letter-spacing: 0.06em;
@@ -1803,7 +1813,7 @@ body {
 .login-error {
   font-size: 0.78rem;
   color: var(--red);
-  font-weight: 600;
+  font-weight: 500;
   text-align: center;
   margin: 0;
 }
@@ -2593,11 +2603,12 @@ body.modal-open { overflow: hidden; }
 }
 
 .portal-watermark--builder {
-  background: rgba(16,185,129,0.08);
-  color: #34d399;
-  border-color: rgba(52,211,153,0.15);
+  background: transparent;
+  color: #333;
+  border-color: transparent;
+  font-size: 0.6rem;
 }
-.portal-watermark--builder::before { background: rgba(52,211,153,0.5); }
+.portal-watermark--builder::before { display: none; }
 
 /* ─── Header action buttons ─────────────────────────────────────────────────── */
 .btn-header-action {
@@ -2625,6 +2636,22 @@ body.modal-open { overflow: hidden; }
   border: none;
   border-top: 1px solid var(--border-dim);
   margin: 1.2rem 0 1rem;
+}
+.settings-logout-btn {
+  width: 100%;
+  padding: 0.6rem 1rem;
+  background: rgba(239,68,68,0.1);
+  border: 1px solid rgba(239,68,68,0.25);
+  border-radius: 8px;
+  color: #ef4444;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition);
+}
+.settings-logout-btn:hover {
+  background: rgba(239,68,68,0.2);
+  border-color: rgba(239,68,68,0.45);
 }
 .settings-section-title {
   font-size: 0.7rem;
