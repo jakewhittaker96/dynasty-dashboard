@@ -237,95 +237,52 @@ function runMaterialsCalc() {
     return;
   }
 
-  const wallArea = Math.max(0, (length * height) - openings);
-  const resultsEl = document.getElementById('calcResults');
-  const copyBtn   = document.getElementById('btnCopyCalc');
+  const wallArea  = Math.max(0, (length * height) - openings);
+  const skins     = thick === 'single' ? 1 : thick === 'block' ? 1 : 2;
+  const bondMult  = bond === 'english' ? 1.1 : bond === 'flemish' ? 1.05 : 1.0;
+  const perM2     = calcBricksPerM2(brickType, joint);
+  const bricksNet = wallArea * perM2 * skins * bondMult;
+  const bricksWaste = Math.ceil(bricksNet * 1.10); // +10% wastage
+
+  // Mortar: approx 1 bag per 50 standard bricks (0.02 bags/brick)
+  const mortarBags = Math.ceil(bricksWaste * 0.022);
+
+  // Weight: standard brick ≈ 3.5kg, block ≈ 12kg
+  const brickWeight = brickType === 'block' ? 12 : brickType === 'jumbo' ? 4.5 : 3.5;
+  const totalWeightKg = Math.round(bricksWaste * brickWeight);
+
+  // Cost from price tracker
+  const prices = loadBrickPrices();
+  const brickPriceEntry = brickType === 'block' ? prices[2] : brickType === 'jumbo' ? prices[0] : prices[0];
+  const mortarPriceEntry = prices[3];
+  const brickCostPer1000 = brickPriceEntry ? brickPriceEntry.price : 1000;
+  const mortarCostPerBag = mortarPriceEntry ? mortarPriceEntry.price : 14;
+  const brickCost   = (bricksWaste / 1000) * brickCostPer1000;
+  const mortarCost  = mortarBags * mortarCostPerBag;
+  const totalCost   = brickCost + mortarCost;
+
+  const resultsEl  = document.getElementById('calcResults');
+  const copyBtn    = document.getElementById('btnCopyCalc');
   if (!resultsEl) return;
 
-  const tradeType = (typeof getTradeType === 'function') ? getTradeType() : 'bricklayer';
-  const isBrick   = tradeType === 'bricklayer' || tradeType === 'block_layer';
+  const resultText = `
+Wall: ${length}m × ${height}m = ${wallArea.toFixed(1)} m² (net)
+Bricks required: ${bricksWaste.toLocaleString()} (incl. 10% wastage)
+Mortar bags: ${mortarBags}
+Total weight: ${(totalWeightKg / 1000).toFixed(1)} tonnes
+Estimated brick cost: ${fmtCurrency(brickCost)}
+Estimated mortar cost: ${fmtCurrency(mortarCost)}
+TOTAL ESTIMATE: ${fmtCurrency(totalCost)}`;
 
-  let resultText = '';
-  let resultHtml = '';
-
-  if (isBrick) {
-    const skins     = thick === 'single' ? 1 : thick === 'block' ? 1 : 2;
-    const bondMult  = bond === 'english' ? 1.1 : bond === 'flemish' ? 1.05 : 1.0;
-    const perM2     = calcBricksPerM2(brickType, joint);
-    const bricksNet = wallArea * perM2 * skins * bondMult;
-    const bricksWaste = Math.ceil(bricksNet * 1.10);
-    const mortarBags  = Math.ceil(bricksWaste * 0.022);
-    const brickWeight = brickType === 'block' ? 12 : brickType === 'jumbo' ? 4.5 : 3.5;
-    const totalWeightKg = Math.round(bricksWaste * brickWeight);
-    const prices = loadBrickPrices();
-    const brickPriceEntry  = brickType === 'block' ? prices[2] : prices[0];
-    const mortarPriceEntry = prices[3];
-    const brickCostPer1000 = brickPriceEntry  ? brickPriceEntry.price  : 1000;
-    const mortarCostPerBag = mortarPriceEntry ? mortarPriceEntry.price :   14;
-    const brickCost  = (bricksWaste / 1000) * brickCostPer1000;
-    const mortarCost = mortarBags * mortarCostPerBag;
-    const totalCost  = brickCost + mortarCost;
-    const unitLabel  = brickType === 'block' ? 'Blocks' : brickType === 'jumbo' ? 'Jumbo Bricks' : 'Bricks';
-
-    resultText = `Wall: ${length}m × ${height}m = ${wallArea.toFixed(1)} m² (net)\n` +
-      `${unitLabel} required: ${bricksWaste.toLocaleString()} (incl. 10% wastage)\n` +
-      `Mortar bags: ${mortarBags}\nTotal weight: ${(totalWeightKg / 1000).toFixed(1)} tonnes\n` +
-      `Estimated ${unitLabel.toLowerCase()} cost: ${fmtCurrency(brickCost)}\n` +
-      `Estimated mortar cost: ${fmtCurrency(mortarCost)}\nTOTAL ESTIMATE: ${fmtCurrency(totalCost)}`;
-
-    resultHtml = `
-      <div class="calc-result-row"><span>Wall area (net)</span><strong>${wallArea.toFixed(1)} m²</strong></div>
-      <div class="calc-result-row"><span>${unitLabel} (+ 10% wastage)</span><strong>${bricksWaste.toLocaleString()}</strong></div>
-      <div class="calc-result-row"><span>Mortar bags (40kg)</span><strong>${mortarBags}</strong></div>
-      <div class="calc-result-row"><span>Total weight</span><strong>${(totalWeightKg / 1000).toFixed(1)} t</strong></div>
-      <div class="calc-result-divider"></div>
-      <div class="calc-result-row"><span>${unitLabel} cost est.</span><strong>${fmtCurrency(brickCost)}</strong></div>
-      <div class="calc-result-row"><span>Mortar cost est.</span><strong>${fmtCurrency(mortarCost)}</strong></div>
-      <div class="calc-result-row calc-result-total"><span>TOTAL ESTIMATE</span><strong>${fmtCurrency(totalCost)}</strong></div>`;
-
-  } else if (tradeType === 'painter') {
-    // 1 litre covers ~12 m² per coat
-    const litres1 = Math.ceil(wallArea / 12);
-    const litres2 = litres1 * 2;
-    resultText = `Area: ${wallArea.toFixed(1)} m²\nPaint (1 coat): ${litres1} L\nPaint (2 coats): ${litres2} L`;
-    resultHtml = `
-      <div class="calc-result-row"><span>Wall area (net)</span><strong>${wallArea.toFixed(1)} m²</strong></div>
-      <div class="calc-result-divider"></div>
-      <div class="calc-result-row"><span>Paint — 1 coat (12 m²/L)</span><strong>${litres1} L</strong></div>
-      <div class="calc-result-row calc-result-total"><span>Paint — 2 coats</span><strong>${litres2} L</strong></div>`;
-
-  } else if (tradeType === 'plasterer') {
-    // 1 × 20kg bag covers ~5 m² at 10mm thickness (+10% wastage)
-    const bags = Math.ceil((wallArea / 5) * 1.10);
-    resultText = `Area: ${wallArea.toFixed(1)} m²\nPlaster bags (20kg, 10mm thick): ${bags}`;
-    resultHtml = `
-      <div class="calc-result-row"><span>Wall area (net)</span><strong>${wallArea.toFixed(1)} m²</strong></div>
-      <div class="calc-result-divider"></div>
-      <div class="calc-result-row calc-result-total"><span>Plaster bags (20kg, +10% wastage)</span><strong>${bags}</strong></div>`;
-
-  } else if (tradeType === 'tiler') {
-    // Standard 300mm tile: ~11 tiles/m² (+10% wastage)
-    const tilesPerM2 = 1 / (0.300 * 0.300);
-    const tiles = Math.ceil(wallArea * tilesPerM2 * 1.10);
-    resultText = `Area: ${wallArea.toFixed(1)} m²\nTiles (300mm, +10% wastage): ${tiles.toLocaleString()}`;
-    resultHtml = `
-      <div class="calc-result-row"><span>Area (net)</span><strong>${wallArea.toFixed(1)} m²</strong></div>
-      <div class="calc-result-divider"></div>
-      <div class="calc-result-row calc-result-total"><span>Tiles 300mm (+ 10% wastage)</span><strong>${tiles.toLocaleString()}</strong></div>`;
-
-  } else if (tradeType === 'pressure_cleaner') {
-    resultText = `Total area to clean: ${wallArea.toFixed(1)} m²`;
-    resultHtml = `
-      <div class="calc-result-row calc-result-total"><span>Area to clean</span><strong>${wallArea.toFixed(1)} m²</strong></div>`;
-
-  } else {
-    // Generic: area + unit count at 1 unit/m²
-    resultText = `Work area: ${wallArea.toFixed(1)} m²`;
-    resultHtml = `
-      <div class="calc-result-row calc-result-total"><span>Work area</span><strong>${wallArea.toFixed(1)} m²</strong></div>`;
-  }
-
-  resultsEl.innerHTML = resultHtml;
+  resultsEl.innerHTML = `
+    <div class="calc-result-row"><span>Wall area (net)</span><strong>${wallArea.toFixed(1)} m²</strong></div>
+    <div class="calc-result-row"><span>Bricks (+ 10% wastage)</span><strong>${bricksWaste.toLocaleString()}</strong></div>
+    <div class="calc-result-row"><span>Mortar bags (40kg)</span><strong>${mortarBags}</strong></div>
+    <div class="calc-result-row"><span>Total weight</span><strong>${(totalWeightKg / 1000).toFixed(1)} t</strong></div>
+    <div class="calc-result-divider"></div>
+    <div class="calc-result-row"><span>Brick cost est.</span><strong>${fmtCurrency(brickCost)}</strong></div>
+    <div class="calc-result-row"><span>Mortar cost est.</span><strong>${fmtCurrency(mortarCost)}</strong></div>
+    <div class="calc-result-row calc-result-total"><span>TOTAL ESTIMATE</span><strong>${fmtCurrency(totalCost)}</strong></div>`;
 
   if (copyBtn) {
     copyBtn.hidden = false;
@@ -345,15 +302,7 @@ function runMaterialsCalc() {
   const runBtn   = document.getElementById('btnRunCalc');
   if (!overlay) return;
 
-  function updateCalcForTrade() {
-    const tradeType = (typeof getTradeType === 'function') ? getTradeType() : 'bricklayer';
-    const isBrick   = tradeType === 'bricklayer' || tradeType === 'block_layer';
-    overlay.querySelectorAll('.calc-brick-only').forEach(el => {
-      el.style.display = isBrick ? '' : 'none';
-    });
-  }
-
-  if (btnOpen)  btnOpen.addEventListener('click',  () => { updateCalcForTrade(); overlay.classList.add('is-open'); });
+  if (btnOpen)  btnOpen.addEventListener('click',  () => overlay.classList.add('is-open'));
   if (closeBtn) closeBtn.addEventListener('click', () => overlay.classList.remove('is-open'));
   if (runBtn)   runBtn.addEventListener('click',   runMaterialsCalc);
   overlay.addEventListener('click', e => { if (e.target === overlay) overlay.classList.remove('is-open'); });
