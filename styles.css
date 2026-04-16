@@ -4341,6 +4341,16 @@ textarea.calc-input { resize: vertical; font-family: inherit; }
 .scal-sm8-card-badge--wo    { background: rgba(76,139,201,0.2); color: #4c8bc9; }
 .scal-sm8-card-badge--quote { background: rgba(201,168,76,0.2); color: #c9a84c; }
 
+.scal-crew-badge {
+  font-size: 0.6rem;
+  font-weight: 700;
+  padding: 0.1rem 0.35rem;
+  border-radius: 3px;
+  background: rgba(82,196,138,0.15);
+  color: #52c48a;
+  letter-spacing: 0.03em;
+}
+
 .scal-card-desc {
   font-size: 0.68rem;
   color: var(--text-muted);

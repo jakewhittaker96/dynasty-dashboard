@@ -11,10 +11,11 @@ function loadSchedCrew()  { try { return JSON.parse(localStorage.getItem('dynast
 function saveSchedCrew(a) { localStorage.setItem('dynasty-sched-crew', JSON.stringify(a)); }
 
 // ── SM8 state for schedule tab ────────────────────────────────────────────────
-let schedSM8Loaded      = false;   // true once fetch attempted
-let schedSM8Jobs        = [];      // active Work Order + Quote jobs
-let schedSM8Activities  = [];      // all jobactivity records
+let schedSM8Loaded      = false;     // true once fetch attempted
+let schedSM8Jobs        = [];        // active Work Order + Quote jobs (for fallback badge count)
+let schedSM8Activities  = [];        // all jobactivity records — primary source of dates
 let schedSM8CompanyMap  = new Map(); // uuid → company name
+let schedSM8AllJobsMap  = new Map(); // uuid → full job object (all statuses, for activity lookup)
 
 // ── Date helpers ──────────────────────────────────────────────────────────────
 function schedDateStr(d) {
@@ -42,17 +43,10 @@ function schedMonWeek(dateStr) {
 let schedWeekStart = schedMonWeek(schedDateStr(new Date()));
 
 // ── Fetch SM8 data for schedule ───────────────────────────────────────────────
+// Always fetches jobactivity.json fresh — never relies on the Jobs tab state,
+// because sm8Activities in app.js can be null if that tab hasn't loaded yet,
+// which caused all jobs to fall back to job.date (the creation date = "today").
 async function loadSchedSM8() {
-  // Reuse already-loaded SM8 data from the Jobs/Finance tab if available
-  if (typeof jobsLoaded !== 'undefined' && jobsLoaded && activeJobsData && activeJobsData.length) {
-    schedSM8Jobs       = activeJobsData.filter(j => j.status === 'Work Order' || j.status === 'Quote');
-    schedSM8Activities = (typeof sm8Activities !== 'undefined' && sm8Activities) ? sm8Activities : [];
-    schedSM8CompanyMap = (typeof sm8CompanyMap !== 'undefined') ? sm8CompanyMap : new Map();
-    schedSM8Loaded = true;
-    return;
-  }
-
-  // Independent fetch (Jobs tab not yet opened)
   try {
     const [jobsRes, actsRes, coRes] = await Promise.allSettled([
       fetchSM8('job.json'),
@@ -61,13 +55,20 @@ async function loadSchedSM8() {
     ]);
 
     if (jobsRes.status === 'fulfilled') {
-      schedSM8Jobs = jobsRes.value
-        .filter(j => j.active === 1 && (j.status === 'Work Order' || j.status === 'Quote'));
+      const allJobs = jobsRes.value;
+      // Full map for activity lookups (any status)
+      schedSM8AllJobsMap = new Map(allJobs.map(j => [j.uuid, j]));
+      // Filtered list for the SM8 badge count
+      schedSM8Jobs = allJobs.filter(j => j.active === 1 &&
+        (j.status === 'Work Order' || j.status === 'Quote'));
     }
+
     if (actsRes.status === 'fulfilled') {
       schedSM8Activities = actsRes.value;
-      console.log('[Schedule] SM8 activities loaded:', schedSM8Activities.length);
+      console.log('[Schedule] SM8 activities loaded:', schedSM8Activities.length,
+        '— unique dates:', new Set(schedSM8Activities.map(a => (a.date || '').slice(0,10))).size);
     }
+
     if (coRes.status === 'fulfilled') {
       schedSM8CompanyMap = new Map();
       for (const co of coRes.value) {
@@ -81,49 +82,58 @@ async function loadSchedSM8() {
 }
 
 // ── Build SM8 card data keyed by date ─────────────────────────────────────────
-// Returns Map<YYYY-MM-DD, [{uuid, client, desc, addr, amt, status, time}]>
+// Returns Map<YYYY-MM-DD, [card]> where each card represents one job on that day.
+// Multiple activity records for the same job+date (different staff) are grouped
+// into a single card with a crew count.
 function buildSM8CardsByDate() {
-  const byDate  = new Map();
-  const jobMap  = new Map(schedSM8Jobs.map(j => [j.uuid, j]));
-  const seen    = new Set(); // uuid+date to avoid duplicate cards for same job/day
+  const byDate = new Map();
 
-  const push = (date, card) => {
-    const key = `${card.uuid}::${date}`;
-    if (seen.has(key)) return;
-    seen.add(key);
-    if (!byDate.has(date)) byDate.set(date, []);
-    byDate.get(date).push(card);
-  };
+  // Group activities by "job_uuid::date"
+  // groups Map: key → { job, date, crewCount, times[] }
+  const groups = new Map();
 
-  const makeCard = (job, timeStr) => ({
-    uuid:   job.uuid,
-    client: schedSM8CompanyMap.get(job.company_uuid || '') || '—',
-    desc:   (job.job_description || '').split('\n')[0].trim().slice(0, 55) || 'No description',
-    addr:   (job.job_address || '').trim().slice(0, 45) || '',
-    amt:    parseFloat(job.total_invoice_amount || 0),
-    status: job.status,
-    time:   timeStr || '',
-  });
-
-  // 1. Place jobs that have scheduled activity records
-  const jobsWithActivity = new Set();
   for (const act of schedSM8Activities) {
     if (!act.job_uuid || !act.date) continue;
-    const job = jobMap.get(act.job_uuid);
-    if (!job) continue;
-    const date = (act.date || '').substring(0, 10);
-    if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) continue;
-    const timeStr = act.start_time ? act.start_time.substring(0, 5) : '';
-    push(date, makeCard(job, timeStr));
-    jobsWithActivity.add(job.uuid);
+    const date = act.date.substring(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) continue;
+
+    const job = schedSM8AllJobsMap.get(act.job_uuid);
+    if (!job) continue; // no matching job record — skip
+
+    const key = `${act.job_uuid}::${date}`;
+    if (!groups.has(key)) {
+      groups.set(key, { job, date, crewCount: 0, times: [] });
+    }
+    const g = groups.get(key);
+    g.crewCount++;
+    if (act.start_time) g.times.push(act.start_time.substring(0, 5));
   }
 
-  // 2. Fallback: jobs with no activity entries → use job.date field
-  for (const job of schedSM8Jobs) {
-    if (jobsWithActivity.has(job.uuid)) continue;
-    const raw  = (job.date || '').substring(0, 10);
-    if (!raw || !/^\d{4}-\d{2}-\d{2}$/.test(raw)) continue;
-    push(raw, makeCard(job, ''));
+  // Convert groups into calendar cards
+  for (const g of groups.values()) {
+    const { job, date, crewCount, times } = g;
+    const card = {
+      uuid:      job.uuid,
+      client:    schedSM8CompanyMap.get(job.company_uuid || '') || job.generated_job_no || '—',
+      desc:      (job.job_description || '').split('\n')[0].trim().slice(0, 55) || 'No description',
+      addr:      (job.job_address || '').trim().slice(0, 45) || '',
+      amt:       parseFloat(job.total_invoice_amount || 0),
+      status:    job.status || 'Work Order',
+      time:      times.length ? [...new Set(times)].sort()[0] : '',
+      crewCount,
+    };
+    if (!byDate.has(date)) byDate.set(date, []);
+    byDate.get(date).push(card);
+  }
+
+  // Sort each day's cards: by time (earliest first), then by client name
+  for (const [, cards] of byDate) {
+    cards.sort((a, b) => {
+      if (a.time && b.time) return a.time.localeCompare(b.time);
+      if (a.time) return -1;
+      if (b.time) return 1;
+      return a.client.localeCompare(b.client);
+    });
   }
 
   return byDate;
@@ -149,9 +159,10 @@ async function renderScheduleTab() {
   const weekEnd = days[6];
   const weekLabel = `${new Date(schedWeekStart + 'T12:00:00').toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })} – ${new Date(weekEnd + 'T12:00:00').toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })}`;
 
+  // Count distinct job-days visible this week (one card per job per day)
   const sm8TotalThisWeek = days.reduce((n, d) => n + (sm8ByDate.get(d)?.length || 0), 0);
   const sm8Badge = schedSM8Loaded
-    ? `<span class="scal-sm8-badge" title="${sm8TotalThisWeek} SM8 job${sm8TotalThisWeek !== 1 ? 's' : ''} this week">&#9679; SM8 ${sm8TotalThisWeek > 0 ? `(${sm8TotalThisWeek})` : 'connected'}</span>`
+    ? `<span class="scal-sm8-badge" title="${sm8TotalThisWeek} scheduled job-day${sm8TotalThisWeek !== 1 ? 's' : ''} this week">&#9679; SM8 ${sm8TotalThisWeek > 0 ? `(${sm8TotalThisWeek})` : 'connected'}</span>`
     : '';
 
   const colsHtml = days.map(date => {
@@ -159,16 +170,18 @@ async function renderScheduleTab() {
     const dayName  = new Date(date + 'T12:00:00').toLocaleDateString('en-AU', { weekday: 'short' });
     const dayNum   = new Date(date + 'T12:00:00').toLocaleDateString('en-AU', { day: 'numeric', month: 'short' });
 
-    // SM8 job cards (read-only)
+    // SM8 job cards (read-only, sourced from jobactivity.json)
     const sm8Cards = (sm8ByDate.get(date) || []).map(j => {
-      const color  = j.status === 'Quote' ? '#c9a84c' : '#4c8bc9';
-      const badge  = `<span class="scal-sm8-card-badge scal-sm8-card-badge--${j.status === 'Quote' ? 'quote' : 'wo'}">${j.status === 'Quote' ? 'Quote' : 'Work Order'}</span>`;
-      const time   = j.time ? `<div class="scal-card-time">&#128336; ${escHtml(j.time)}</div>` : '';
-      const addr   = j.addr ? `<div class="scal-card-addr">&#128205; ${escHtml(j.addr)}</div>` : '';
-      const amt    = j.amt > 0 ? `<div class="scal-card-amt">${fmtCurrency(j.amt)}</div>` : '';
+      const isQuote = j.status === 'Quote';
+      const color   = isQuote ? '#c9a84c' : '#4c8bc9';
+      const badge   = `<span class="scal-sm8-card-badge scal-sm8-card-badge--${isQuote ? 'quote' : 'wo'}">${isQuote ? 'Quote' : 'WO'}</span>`;
+      const crew    = j.crewCount > 1 ? `<span class="scal-crew-badge">&#128119; ${j.crewCount}</span>` : '';
+      const time    = j.time ? `<div class="scal-card-time">&#128336; ${escHtml(j.time)}</div>` : '';
+      const addr    = j.addr ? `<div class="scal-card-addr">&#128205; ${escHtml(j.addr)}</div>` : '';
+      const amt     = j.amt > 0 ? `<div class="scal-card-amt">${fmtCurrency(j.amt)}</div>` : '';
       return `
         <div class="scal-card scal-card--sm8" style="border-left-color:${color}" title="${escHtml(j.client)} — ${escHtml(j.desc)}">
-          <div class="scal-card-sm8-header">${badge}${amt}</div>
+          <div class="scal-card-sm8-header">${badge}${crew}${amt}</div>
           <div class="scal-card-title">${escHtml(j.client)}</div>
           <div class="scal-card-desc">${escHtml(j.desc)}</div>
           ${addr}${time}
