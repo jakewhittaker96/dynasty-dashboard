@@ -64,11 +64,12 @@ async function connectXero() {
     const data = await res.json();
     if (!data.url) return;
 
-    // Try popup first
-    const popup = window.open(data.url, 'xero-oauth', 'width=600,height=700,noopener');
+    // Open popup WITHOUT noopener — the popup must be able to read window.opener
+    // so it can postMessage the code back and then close itself.
+    const popup = window.open(data.url, 'xero-oauth', 'width=600,height=700');
 
     if (!popup || popup.closed) {
-      // Fallback: redirect main window
+      // Popup was blocked — fall back to main-window redirect
       window.location.href = data.url;
       return;
     }
@@ -125,48 +126,6 @@ function updateXeroSettingsUI() {
     if (btnConnect)  btnConnect.hidden   = false;
     if (connStatus)  connStatus.hidden   = true;
     if (hint)        hint.textContent    = 'Sync invoices, payments and bank data from Xero.';
-  }
-}
-
-// ─── Finance panel loader ─────────────────────────────────────────────────────
-async function loadXeroPanel() {
-  const panelEl = document.getElementById('xeroFinancePanel');
-  const labelEl = document.getElementById('xeroFinanceSectionLabel');
-  if (!panelEl) return;
-
-  const t = await getValidXeroToken();
-  if (!t) {
-    panelEl.hidden = true;
-    if (labelEl) labelEl.hidden = true;
-    return;
-  }
-
-  panelEl.hidden = false;
-  if (labelEl) labelEl.hidden = false;
-  panelEl.innerHTML = '<div class="xero-loading">Loading Xero data…</div>';
-
-  try {
-    const payload = { accessToken: t.accessToken, tenantId: t.tenantId };
-    const [invRes, accRes] = await Promise.all([
-      fetch(`${XERO_API_BASE}/invoices`, {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify(payload),
-      }),
-      fetch(`${XERO_API_BASE}/accounts`, {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify(payload),
-      }),
-    ]);
-
-    const invData = invRes.ok ? await invRes.json() : {};
-    const accData = accRes.ok ? await accRes.json() : {};
-
-    renderXeroPanel(invData.Invoices || [], accData.Accounts || []);
-    applyXeroBadgesToJobs(invData.Invoices || []);
-  } catch (e) {
-    panelEl.innerHTML = `<div class="xero-error">Failed to load Xero data: ${xeroEsc(e.message)}</div>`;
   }
 }
 
@@ -307,45 +266,83 @@ function xeroEsc(str) {
     .replace(/"/g, '&quot;');
 }
 
+// ─── Finance panel loader (with debug logging) ───────────────────────────────
+async function loadXeroPanel() {
+  const panelEl = document.getElementById('xeroFinancePanel');
+  const labelEl = document.getElementById('xeroFinanceSectionLabel');
+  if (!panelEl) return;
+
+  const stored = localStorage.getItem(XERO_STORAGE_KEY);
+  console.log('[xero] loadXeroPanel called. localStorage xeroToken:', stored);
+
+  const t = await getValidXeroToken();
+  if (!t) {
+    console.log('[xero] No valid token — panel hidden.');
+    panelEl.hidden = true;
+    if (labelEl) labelEl.hidden = true;
+    return;
+  }
+
+  console.log('[xero] Valid token found. tenantId:', t.tenantId, 'expiresAt:', new Date(t.expiresAt).toISOString());
+  panelEl.hidden = false;
+  if (labelEl) labelEl.hidden = false;
+  panelEl.innerHTML = '<div class="xero-loading">Loading Xero data…</div>';
+
+  try {
+    const payload = { accessToken: t.accessToken, tenantId: t.tenantId };
+    const [invRes, accRes] = await Promise.all([
+      fetch(`${XERO_API_BASE}/invoices`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify(payload),
+      }),
+      fetch(`${XERO_API_BASE}/accounts`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify(payload),
+      }),
+    ]);
+
+    const invData = invRes.ok ? await invRes.json() : {};
+    const accData = accRes.ok ? await accRes.json() : {};
+
+    console.log('[xero] Invoices response status:', invRes.status, '— count:', (invData.Invoices || []).length);
+    console.log('[xero] Accounts response status:', accRes.status, '— count:', (accData.Accounts || []).length);
+
+    renderXeroPanel(invData.Invoices || [], accData.Accounts || []);
+    applyXeroBadgesToJobs(invData.Invoices || []);
+  } catch (e) {
+    console.error('[xero] loadXeroPanel error:', e.message);
+    panelEl.innerHTML = `<div class="xero-error">Failed to load Xero data: ${xeroEsc(e.message)}</div>`;
+  }
+}
+
 // ─── Init ─────────────────────────────────────────────────────────────────────
 (function initXero() {
-  // Check if this page load is an OAuth callback (popup or main-window redirect)
   const params = new URLSearchParams(window.location.search);
   const code   = params.get('code');
   const state  = params.get('state');
 
-  if (code && state === 'xero') {
-    if (window.opener && !window.opener.closed) {
-      // We're in the popup — relay code to parent and close
-      try {
-        window.opener.postMessage({ type: 'xero-callback', code }, window.location.origin);
-      } catch (_) {}
-      window.close();
-      return;
-    }
-
-    // Main-window redirect fallback — exchange directly then clean URL
-    exchangeXeroCode(code).then(() => {
-      const url = new URL(window.location.href);
-      url.searchParams.delete('code');
-      url.searchParams.delete('state');
-      window.history.replaceState({}, '', url.toString());
-      updateXeroSettingsUI();
-      // Load panel if Finance is currently visible
-      const financeView = document.getElementById('viewFinance');
-      if (financeView && !financeView.hidden) loadXeroPanel();
-    });
+  // ── Popup path: relay code to parent and close immediately ──────────────────
+  // Must be checked before DOMContentLoaded since we want to close ASAP.
+  // NOTE: window.open() must NOT use 'noopener' — otherwise window.opener is
+  // null here and the popup can't detect it's a popup.
+  if (code && state === 'xero' && window.opener && !window.opener.closed) {
+    console.log('[xero] Popup callback detected — relaying code to parent.');
+    try { window.opener.postMessage({ type: 'xero-callback', code }, window.location.origin); } catch (_) {}
+    window.close();
     return;
   }
 
-  // Wire up buttons after DOM is ready
+  // ── Everything else runs after DOM is ready ─────────────────────────────────
+  // This block always runs — including after a main-window OAuth redirect.
+  // (The early-return bug: previously the main-window redirect path returned
+  //  before this block, so the Finance tab click listener was never registered.)
   document.addEventListener('DOMContentLoaded', function () {
     const btnConnect    = document.getElementById('btnConnectXero');
     const btnDisconnect = document.getElementById('btnDisconnectXero');
 
-    if (btnConnect) {
-      btnConnect.addEventListener('click', connectXero);
-    }
+    if (btnConnect) btnConnect.addEventListener('click', connectXero);
     if (btnDisconnect) {
       btnDisconnect.addEventListener('click', function () {
         clearXeroToken();
@@ -359,13 +356,27 @@ function xeroEsc(str) {
 
     updateXeroSettingsUI();
 
-    // Load panel when Finance tab is clicked
+    // Finance tab click → load panel (delegated, works even before tabs are created)
     document.addEventListener('click', function (e) {
       const tab = e.target.closest('.tab[data-site="__finance__"]');
       if (tab) {
-        // Small delay so switchTab() runs first and the panel is visible
+        console.log('[xero] Finance tab clicked — scheduling loadXeroPanel.');
+        // Delay slightly so switchTab() makes #viewFinance visible first
         setTimeout(loadXeroPanel, 50);
       }
     });
+
+    // Main-window OAuth redirect: exchange code now that DOM is ready
+    if (code && state === 'xero') {
+      console.log('[xero] Main-window OAuth callback — exchanging code.');
+      exchangeXeroCode(code).then(function () {
+        const url = new URL(window.location.href);
+        url.searchParams.delete('code');
+        url.searchParams.delete('state');
+        window.history.replaceState({}, '', url.toString());
+        updateXeroSettingsUI();
+        console.log('[xero] Token saved after main-window redirect. localStorage:', localStorage.getItem(XERO_STORAGE_KEY));
+      });
+    }
   });
 }());
