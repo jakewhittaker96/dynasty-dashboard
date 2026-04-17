@@ -464,8 +464,7 @@ body { font-family: Helvetica, Arial, sans-serif; font-size:10pt; color:#222; ba
 .page:last-child { page-break-after: avoid; break-after: avoid; }
 
 /* ══ PAGE 1: COVER ══════════════════════════════════════════ */
-/* White background, black text, gold divider only */
-.cover { background: #ffffff; color: #000000; }
+.cover { background: #0d0d0d; color: #f0f0f0; }
 
 .cover-top {
   display: flex;
@@ -474,63 +473,80 @@ body { font-family: Helvetica, Arial, sans-serif; font-size:10pt; color:#222; ba
   padding-bottom: 14pt;
   margin-bottom: 0;
 }
+.cover-logo-name {
+  font-size: 20pt;
+  font-weight: 700;
+  color: #ffffff;
+  line-height: 1.2;
+}
 .cover-divider {
   width: 100%;
   border: none;
   border-top: 1pt solid #C9A84C;
-  margin: 0 0 32pt;
-}
-.cover-logo-name {
-  font-size: 18pt;
-  font-weight: 700;
-  color: #000000;
-  line-height: 1.2;
+  margin: 0 0 36pt;
 }
 .cover-ref-box {
   text-align: right;
   font-size: 9pt;
   line-height: 2;
-  color: #333333;
+  color: #cccccc;
 }
-.cover-ref-label {
-  font-size: 9pt;
+.cover-ref-num {
+  display: block;
+  font-size: 10pt;
   font-weight: 700;
-  color: #000000;
+  color: #C9A84C;
+  margin-bottom: 2pt;
 }
 .cover-ref-total {
-  font-size: 9pt;
+  display: block;
+  font-size: 14pt;
   font-weight: 700;
-  color: #000000;
+  color: #C9A84C;
+  margin-top: 4pt;
+  letter-spacing: -0.3px;
 }
 
-.cover-hero { margin: 0 0 28pt; }
+.cover-hero { margin: 0 0 0; }
 .cover-job-title {
-  font-size: 28pt;
+  font-size: 32pt;
   font-weight: 700;
-  color: #000000;
-  line-height: 1.15;
-  letter-spacing: -0.3px;
-  margin-bottom: 8pt;
+  color: #ffffff;
+  line-height: 1.1;
+  letter-spacing: -0.5px;
+  margin-bottom: 10pt;
 }
 .cover-address {
-  font-size: 13pt;
-  color: #666666;
-  margin-bottom: 12pt;
+  font-size: 14pt;
+  color: #C9A84C;
+  margin-bottom: 14pt;
   line-height: 1.4;
 }
 .cover-prepared {
   font-size: 11pt;
-  color: #333333;
-  line-height: 1.5;
+  color: #cccccc;
+  line-height: 1.6;
 }
-.cover-prepared strong { color: #000000; font-weight: 700; }
+.cover-prepared strong { color: #C9A84C; font-weight: 700; }
 
+.cover-contact-strip {
+  position: absolute;
+  bottom: 26mm;
+  left: 17mm;
+  right: 17mm;
+  border-top: 1px solid #1e1e1e;
+  padding-top: 8pt;
+  text-align: center;
+  font-size: 8pt;
+  color: #555555;
+  letter-spacing: 0.3px;
+}
 .cover-pgnum {
   position: absolute;
   bottom: 14mm;
   right: 17mm;
   font-size: 8pt;
-  color: #999999;
+  color: #444444;
 }
 
 /* ══ INNER PAGE HEADER (pages 2-4) ══════════════════════════ */
@@ -638,7 +654,7 @@ body { font-family: Helvetica, Arial, sans-serif; font-size:10pt; color:#222; ba
   <div class="cover-top">
     <div>${logoBlock}</div>
     <div class="cover-ref-box">
-      <span class="cover-ref-label">Reference: ${escHtml(quoteRef)}</span><br>
+      <span class="cover-ref-num">Reference: ${escHtml(quoteRef)}</span>
       Issue Date: ${today}<br>
       Valid For: 30 days<br>
       <span class="cover-ref-total">Total: ${fmtCurrency(total)}</span>
@@ -653,6 +669,11 @@ body { font-family: Helvetica, Arial, sans-serif; font-size:10pt; color:#222; ba
     <div class="cover-job-title">${escHtml(fields.jobType)}</div>
     ${fields.address ? `<div class="cover-address">${escHtml(fields.address)}</div>` : ''}
     <div class="cover-prepared">Prepared for: <strong>${escHtml(fields.client)}</strong></div>
+  </div>
+
+  <!-- Bottom contact strip -->
+  <div class="cover-contact-strip">
+    ${[bizPhone, bizEmail].filter(Boolean).map(s => escHtml(s)).join('&nbsp;&nbsp;|&nbsp;&nbsp;')}
   </div>
 
   <div class="cover-pgnum">Page 1 of 4</div>
