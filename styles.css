@@ -5105,11 +5105,24 @@ textarea.calc-input { resize: vertical; font-family: inherit; }
     font-size: 0.82rem;
   }
 
-  /* ── 8. BUILDER WATERMARK — hide on mobile ─────────────────────────────────
+  /* ── 4b. KPI / stat labels — prevent wrapping on small cards ──────────────── */
+  .kpi-label,
+  .stat-label,
+  [class*="-label"] {
+    font-size: 0.52rem !important;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* ── 8. BUILDER + CLIENT WATERMARK — hide on mobile ────────────────────────
      Fixed bottom-right position covers content on small screens.
   ─────────────────────────────────────────────────────────────────────────── */
-  .portal-watermark--builder {
-    display: none;
+  .portal-watermark--builder,
+  .builder-view-watermark,
+  #builderViewWatermark,
+  [class*="watermark"] {
+    display: none !important;
   }
 
   /* ── 9. AI CHAT ─────────────────────────────────────────────────────────────
