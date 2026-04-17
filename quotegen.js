@@ -418,8 +418,8 @@ function generateQuotePDF(quoteText, fields, calc) {
 
   // ── Logo block (page 1 top-left) ───────────────────────────────────────────
   const logoBlock = bizLogo
-    ? `<img src="${bizLogo}" style="max-height:80px;max-width:200px;object-fit:contain;display:block">`
-    : `<div style="font-size:20pt;font-weight:900;letter-spacing:-0.5px;color:#fff">${escHtml(bizName)}</div>`;
+    ? `<img src="${bizLogo}" style="max-height:60px;max-width:200px;object-fit:contain;display:block">`
+    : `<div class="cover-logo-name">${escHtml(bizName)}</div>`;
 
   // ── Contact footer string (page 1 bottom) ──────────────────────────────────
   const contactLeft  = [bizABN ? 'ABN ' + bizABN : '', bizAddr].filter(Boolean).join('  ·  ');
@@ -464,84 +464,73 @@ body { font-family: Helvetica, Arial, sans-serif; font-size:10pt; color:#222; ba
 .page:last-child { page-break-after: avoid; break-after: avoid; }
 
 /* ══ PAGE 1: COVER ══════════════════════════════════════════ */
-.cover { background: #0d0d0d; color: #f0f0f0; }
+/* White background, black text, gold divider only */
+.cover { background: #ffffff; color: #000000; }
 
 .cover-top {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  padding-bottom: 11pt;
-  margin-bottom: 11pt;
-  border-bottom: 1px solid #C9A84C;
+  padding-bottom: 14pt;
+  margin-bottom: 0;
 }
-.cover-ref-box { text-align: right; font-size: 9pt; line-height: 1.9; color: #aaa; }
-.cover-ref-num {
-  display: block;
-  font-size: 14pt;
-  font-weight: 800;
-  color: #C9A84C;
-  letter-spacing: 1.5px;
-  margin-bottom: 2pt;
+.cover-divider {
+  width: 100%;
+  border: none;
+  border-top: 1pt solid #C9A84C;
+  margin: 0 0 32pt;
 }
-.cover-total {
-  display: block;
+.cover-logo-name {
   font-size: 18pt;
-  font-weight: 900;
-  color: #fff;
-  margin-top: 6pt;
-  letter-spacing: -0.5px;
+  font-weight: 700;
+  color: #000000;
+  line-height: 1.2;
+}
+.cover-ref-box {
+  text-align: right;
+  font-size: 9pt;
+  line-height: 2;
+  color: #333333;
+}
+.cover-ref-label {
+  font-size: 9pt;
+  font-weight: 700;
+  color: #000000;
+}
+.cover-ref-total {
+  font-size: 9pt;
+  font-weight: 700;
+  color: #000000;
 }
 
-.cover-hero { margin: 34pt 0 26pt; }
-.cover-eyebrow {
-  font-size: 7.5pt;
-  letter-spacing: 4px;
-  text-transform: uppercase;
-  color: #C9A84C;
-  margin-bottom: 10pt;
-}
-.cover-title {
+.cover-hero { margin: 0 0 28pt; }
+.cover-job-title {
   font-size: 28pt;
-  font-weight: 900;
-  color: #fff;
-  line-height: 1.1;
-  letter-spacing: -0.5px;
+  font-weight: 700;
+  color: #000000;
+  line-height: 1.15;
+  letter-spacing: -0.3px;
   margin-bottom: 8pt;
 }
-.cover-subtitle { font-size: 11pt; color: #777; line-height: 1.5; }
-
-.cover-info-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 14pt;
-  margin-bottom: 18pt;
-  border: 1px solid #222;
-  border-top: 2px solid #C9A84C;
-  background: #161616;
-  border-radius: 4px;
-  padding: 14pt 16pt;
+.cover-address {
+  font-size: 13pt;
+  color: #666666;
+  margin-bottom: 12pt;
+  line-height: 1.4;
 }
-.ci-label {
-  font-size: 7pt;
-  letter-spacing: 1.2px;
-  text-transform: uppercase;
-  color: #C9A84C;
-  margin-bottom: 4pt;
+.cover-prepared {
+  font-size: 11pt;
+  color: #333333;
+  line-height: 1.5;
 }
-.ci-val { font-size: 10.5pt; font-weight: 700; color: #f0f0f0; line-height: 1.35; }
-.ci-sub { font-size: 8.5pt; color: #777; margin-top: 2pt; line-height: 1.4; }
+.cover-prepared strong { color: #000000; font-weight: 700; }
 
-.cover-footer {
+.cover-pgnum {
   position: absolute;
-  bottom: 16mm;
-  left: 17mm;
+  bottom: 14mm;
   right: 17mm;
-  border-top: 1px solid #1e1e1e;
-  padding-top: 8pt;
-  display: flex;
-  justify-content: space-between;
-  font-size: 7.5pt;
-  color: #555;
+  font-size: 8pt;
+  color: #999999;
 }
 
 /* ══ INNER PAGE HEADER (pages 2-4) ══════════════════════════ */
@@ -645,43 +634,28 @@ body { font-family: Helvetica, Arial, sans-serif; font-size:10pt; color:#222; ba
 ══════════════════════════════════════════════════════════════ -->
 <div class="page cover">
 
+  <!-- Top row: logo/name left · ref block right -->
   <div class="cover-top">
     <div>${logoBlock}</div>
     <div class="cover-ref-box">
-      <span class="cover-ref-num">${escHtml(quoteRef)}</span>
+      <span class="cover-ref-label">Reference: ${escHtml(quoteRef)}</span><br>
       Issue Date: ${today}<br>
       Valid For: 30 days<br>
-      Expires: ${expires}<br>
-      <span class="cover-total">${fmtCurrency(total)}</span>
+      <span class="cover-ref-total">Total: ${fmtCurrency(total)}</span>
     </div>
   </div>
 
+  <!-- Full-width gold divider -->
+  <hr class="cover-divider">
+
+  <!-- Hero: job type, address, prepared for -->
   <div class="cover-hero">
-    <div class="cover-eyebrow">Formal Quotation</div>
-    <div class="cover-title">Quote for<br>${escHtml(fields.client)}</div>
-    <div class="cover-subtitle">${escHtml(fields.jobType)}${fields.address ? ' &nbsp;·&nbsp; ' + escHtml(fields.address) : ''}</div>
+    <div class="cover-job-title">${escHtml(fields.jobType)}</div>
+    ${fields.address ? `<div class="cover-address">${escHtml(fields.address)}</div>` : ''}
+    <div class="cover-prepared">Prepared for: <strong>${escHtml(fields.client)}</strong></div>
   </div>
 
-  <div class="cover-info-grid">
-    <div>
-      <div class="ci-label">Prepared For</div>
-      <div class="ci-val">${escHtml(fields.client)}</div>
-      ${fields.address ? `<div class="ci-sub">${escHtml(fields.address)}</div>` : ''}
-    </div>
-    <div>
-      <div class="ci-label">Project Details</div>
-      <div class="ci-val">${escHtml(fields.jobType)}</div>
-      <div class="ci-sub">
-        Dimensions: ${escHtml(dimDesc)}<br>
-        Est. Start: ${fields.startDate ? escHtml(fields.startDate) : 'TBC'}
-      </div>
-    </div>
-  </div>
-
-  <div class="cover-footer">
-    <span>${escHtml(contactLeft)}</span>
-    <span>${escHtml(contactRight)}</span>
-  </div>
+  <div class="cover-pgnum">Page 1 of 4</div>
 
 </div><!-- /cover -->
 
