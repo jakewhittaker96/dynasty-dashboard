@@ -332,151 +332,479 @@ Keep it professional, clear, and practical. Australian English throughout.`;
   }
 }
 
-// ── PDF generation ────────────────────────────────────────────────────────────
+// ── Parse scope items from AI quote text ─────────────────────────────────────
+function parseScopeItems(quoteText, fallbackJobType) {
+  // 1. Try to isolate the SCOPE OF WORK section
+  const scopeMatch = quoteText.match(
+    /SCOPE OF WORK[:\s\n]+([\s\S]*?)(?=\n(?:MATERIALS|LABOUR|PRICE|PAYMENT|EXCLUSION|ACCEPTANCE|TERMS|─{3,}|={3,})|$)/i
+  );
+  const source = scopeMatch ? scopeMatch[1] : quoteText;
+
+  // 2. Extract lines that look like scope items
+  const lines = source
+    .split('\n')
+    .map(l => l.replace(/^\s*[\u2022\-\*\d]+[.):\s]*/u, '').trim()) // strip bullets + numbering
+    .filter(l =>
+      l.length > 12 &&
+      !/^(scope of work|materials|labour|price breakdown|payment|exclusion|acceptance|dynasty|quote ref|date:|valid|prepared|client:|address:|job type|rate:|gst:|deposit|balance|thank you)/i.test(l) &&
+      !/^[─=\-]{3,}$/.test(l)
+    );
+
+  // 3. Deduplicate, max 12 items
+  const seen  = new Set();
+  const items = [];
+  for (const l of lines) {
+    const key = l.toLowerCase().slice(0, 60);
+    if (!seen.has(key) && items.length < 12) {
+      seen.add(key);
+      items.push(l);
+    }
+  }
+
+  if (items.length === 0) {
+    items.push(`Supply and lay ${escHtml(fallbackJobType)} as per quoted dimensions and specifications.`);
+    items.push('All works to be completed to a high standard in accordance with Australian building standards.');
+    items.push('Site to be left clean and tidy upon completion.');
+  }
+  return items;
+}
+
+// ── PDF generation — 4-page A4 professional quote ────────────────────────────
 function generateQuotePDF(quoteText, fields, calc) {
-  const bp         = (typeof loadBusinessProfile === 'function') ? loadBusinessProfile() : {};
-  const bizName    = bp.name    || 'Dynasty Bricklaying & Pressure Cleaning';
-  const bizABN     = bp.abn     || '';
-  const bizPhone   = bp.phone   || '';
-  const bizEmail   = bp.email   || '';
-  const bizAddress = bp.address || '';
-  const bizTerms   = bp.terms   || '30% deposit on acceptance, 70% on completion. Payment by bank transfer.';
-  const bizLogo    = bp.logo    || '';
+  // ── Business profile ───────────────────────────────────────────────────────
+  const bp      = (typeof loadBusinessProfile === 'function') ? loadBusinessProfile() : {};
+  const bizName = bp.name    || 'Dynasty Bricklaying & Pressure Cleaning';
+  const bizABN  = bp.abn     || '';
+  const bizPhone= bp.phone   || '';
+  const bizEmail= bp.email   || '';
+  const bizAddr = bp.address || '';
+  const bizLogo = bp.logo    || '';
 
-  const today      = new Date().toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' });
-  const validUntil = new Date(Date.now() + 30 * 86400000).toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' });
+  // ── Dates ──────────────────────────────────────────────────────────────────
+  const today     = new Date().toLocaleDateString('en-AU', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  const todayLong = new Date().toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' });
+  const expires   = new Date(Date.now() + 30 * 86400000).toLocaleDateString('en-AU', { day: '2-digit', month: '2-digit', year: 'numeric' });
 
-  const logoHtml = bizLogo
-    ? `<img src="${bizLogo}" alt="Logo" style="max-height:56px;max-width:160px;object-fit:contain;display:block;margin-bottom:6px" />`
-    : '';
-  const contactLines = [
-    bizABN     ? `ABN: ${escHtml(bizABN)}`         : '',
-    bizPhone   ? `Phone: ${escHtml(bizPhone)}`      : '',
-    bizEmail   ? `Email: ${escHtml(bizEmail)}`      : '',
-    bizAddress ? escHtml(bizAddress)                 : '',
-  ].filter(Boolean).join('<br>');
+  // ── Quote reference ────────────────────────────────────────────────────────
+  const refMatch = quoteText.match(/Q[A-Z]-?(\d{4,6})/i);
+  const rawRef   = refMatch ? refMatch[1] : String(Math.floor(1000 + Math.random() * 9000));
+  const quoteRef = 'Q-' + rawRef.substring(0, 5).padStart(4, '0');
+
+  // ── Logo block (page 1 top-left) ───────────────────────────────────────────
+  const logoBlock = bizLogo
+    ? `<img src="${bizLogo}" style="max-height:80px;max-width:200px;object-fit:contain;display:block">`
+    : `<div style="font-size:20pt;font-weight:900;letter-spacing:-0.5px;color:#fff">${escHtml(bizName)}</div>`;
+
+  // ── Contact footer string (page 1 bottom) ──────────────────────────────────
+  const contactLeft  = [bizABN ? 'ABN ' + bizABN : '', bizAddr].filter(Boolean).join('  ·  ');
+  const contactRight = [bizPhone, bizEmail].filter(Boolean).join('  ·  ');
+
+  // ── Parsed scope items ─────────────────────────────────────────────────────
+  const scopeItems = parseScopeItems(quoteText, fields.jobType);
+
+  // ── Pricing ────────────────────────────────────────────────────────────────
+  const subtotal = calc.subtotal;
+  const gstAmt   = calc.gstAmt;
+  const total    = calc.total;
+  const deposit  = calc.deposit;
+  const balance  = total - deposit;
+
+  // ── Dimension description ──────────────────────────────────────────────────
+  const dimDesc = fields.dimMode === 'area'
+    ? `${fields.area} m²`
+    : `${fields.length}m × ${fields.height}m`;
 
   const html = `<!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>${escHtml(bizName)} — Quote for ${escHtml(fields.client)}</title>
+<title>${escHtml(bizName)} — ${escHtml(quoteRef)}</title>
 <style>
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { font-family: Arial, sans-serif; font-size: 11pt; color: #222; background: #fff; padding: 40px; }
-  .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 32px; padding-bottom: 20px; border-bottom: 3px solid #C9A84C; }
-  .brand-name { font-size: 20pt; font-weight: 900; color: #111; letter-spacing: -0.5px; }
-  .brand-sub  { font-size: 9pt; color: #666; margin-top: 3px; text-transform: uppercase; letter-spacing: 1px; }
-  .gold-bar   { width: 60px; height: 4px; background: #C9A84C; margin-top: 6px; }
-  .header-right { text-align: right; font-size: 9pt; color: #555; line-height: 1.8; }
-  .header-right strong { font-size: 10pt; color: #222; display: block; margin-bottom: 4px; }
-  h2 { font-size: 13pt; color: #111; margin: 20px 0 8px; border-left: 4px solid #C9A84C; padding-left: 10px; }
-  p  { line-height: 1.6; margin-bottom: 8px; }
-  .meta-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 16px 0; }
-  .meta-box  { background: #f8f6f0; border: 1px solid #e8e0cc; border-radius: 4px; padding: 12px; }
-  .meta-label{ font-size: 8pt; text-transform: uppercase; letter-spacing: 0.8px; color: #888; margin-bottom: 4px; }
-  .meta-val  { font-size: 10pt; font-weight: 600; }
-  table { width: 100%; border-collapse: collapse; margin: 12px 0; }
-  th { background: #111; color: #C9A84C; text-align: left; padding: 8px 10px; font-size: 9pt; text-transform: uppercase; letter-spacing: 0.5px; }
-  td { padding: 7px 10px; border-bottom: 1px solid #eee; font-size: 10pt; }
-  tr:last-child td { border-bottom: none; }
-  .total-row td { background: #f8f6f0; font-weight: 700; border-top: 2px solid #C9A84C; }
-  .total-row td:last-child { color: #C9A84C; font-size: 12pt; }
-  .payment-box { background: #111; color: #fff; border-radius: 4px; padding: 16px; margin: 16px 0; }
-  .payment-box h3 { color: #C9A84C; font-size: 11pt; margin-bottom: 10px; }
-  .payment-box p  { font-size: 9.5pt; color: #ddd; margin-bottom: 5px; }
-  .payment-box .amt { color: #fff; font-weight: 700; }
-  ul { margin: 8px 0 8px 20px; }
-  li { font-size: 10pt; line-height: 1.7; color: #444; }
-  .sig-section { margin-top: 32px; padding-top: 20px; border-top: 1px solid #ddd; display: grid; grid-template-columns: 1fr 1fr; gap: 32px; }
-  .sig-box { border: 1px solid #ccc; border-radius: 4px; padding: 16px; min-height: 80px; }
-  .sig-label { font-size: 8.5pt; color: #888; margin-bottom: 6px; }
-  .sig-line  { border-bottom: 1px solid #ccc; margin-top: 40px; }
-  .footer { margin-top: 24px; text-align: center; font-size: 8.5pt; color: #aaa; }
-  .quote-body { white-space: pre-wrap; font-family: Arial, sans-serif; font-size: 10pt; line-height: 1.7; background: #fafaf9; border: 1px solid #e8e0cc; border-radius: 4px; padding: 20px; margin: 16px 0; }
-  @media print { body { padding: 20px; } }
+/* ── Reset ── */
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family: Helvetica, Arial, sans-serif; font-size:10pt; color:#222; background:#fff; }
+@page { size: A4; margin: 0; }
+
+/* ── Page container ── */
+.page {
+  width: 210mm;
+  min-height: 297mm;
+  padding: 18mm 17mm 24mm;
+  position: relative;
+  background: #fff;
+  page-break-after: always;
+  break-after: page;
+}
+.page:last-child { page-break-after: avoid; break-after: avoid; }
+
+/* ══ PAGE 1: COVER ══════════════════════════════════════════ */
+.cover { background: #0d0d0d; color: #f0f0f0; }
+
+.cover-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding-bottom: 11pt;
+  margin-bottom: 11pt;
+  border-bottom: 1px solid #C9A84C;
+}
+.cover-ref-box { text-align: right; font-size: 9pt; line-height: 1.9; color: #aaa; }
+.cover-ref-num {
+  display: block;
+  font-size: 14pt;
+  font-weight: 800;
+  color: #C9A84C;
+  letter-spacing: 1.5px;
+  margin-bottom: 2pt;
+}
+.cover-total {
+  display: block;
+  font-size: 18pt;
+  font-weight: 900;
+  color: #fff;
+  margin-top: 6pt;
+  letter-spacing: -0.5px;
+}
+
+.cover-hero { margin: 34pt 0 26pt; }
+.cover-eyebrow {
+  font-size: 7.5pt;
+  letter-spacing: 4px;
+  text-transform: uppercase;
+  color: #C9A84C;
+  margin-bottom: 10pt;
+}
+.cover-title {
+  font-size: 28pt;
+  font-weight: 900;
+  color: #fff;
+  line-height: 1.1;
+  letter-spacing: -0.5px;
+  margin-bottom: 8pt;
+}
+.cover-subtitle { font-size: 11pt; color: #777; line-height: 1.5; }
+
+.cover-info-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14pt;
+  margin-bottom: 18pt;
+  border: 1px solid #222;
+  border-top: 2px solid #C9A84C;
+  background: #161616;
+  border-radius: 4px;
+  padding: 14pt 16pt;
+}
+.ci-label {
+  font-size: 7pt;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: #C9A84C;
+  margin-bottom: 4pt;
+}
+.ci-val { font-size: 10.5pt; font-weight: 700; color: #f0f0f0; line-height: 1.35; }
+.ci-sub { font-size: 8.5pt; color: #777; margin-top: 2pt; line-height: 1.4; }
+
+.cover-footer {
+  position: absolute;
+  bottom: 16mm;
+  left: 17mm;
+  right: 17mm;
+  border-top: 1px solid #1e1e1e;
+  padding-top: 8pt;
+  display: flex;
+  justify-content: space-between;
+  font-size: 7.5pt;
+  color: #555;
+}
+
+/* ══ INNER PAGE HEADER (pages 2-4) ══════════════════════════ */
+.inner-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  padding-bottom: 9pt;
+  margin-bottom: 18pt;
+  border-bottom: 1px solid #ddd;
+}
+.ih-biz { font-size: 10.5pt; font-weight: 700; color: #111; }
+.ih-meta { font-size: 8pt; color: #888; text-align: right; line-height: 1.65; }
+
+/* ══ PAGE 2: COVER LETTER ═══════════════════════════════════ */
+.letter-date { font-size: 10pt; color: #555; margin-bottom: 20pt; }
+.letter-greeting { font-size: 10pt; font-weight: 600; color: #111; margin-bottom: 16pt; }
+.letter-section-title {
+  font-size: 14pt;
+  font-weight: 700;
+  color: #111;
+  margin-bottom: 12pt;
+  border-left: 3px solid #C9A84C;
+  padding-left: 10pt;
+}
+.letter-p { font-size: 10pt; line-height: 1.8; color: #333; margin-bottom: 11pt; }
+.letter-signoff { font-size: 10pt; line-height: 1.9; color: #333; margin-top: 26pt; }
+.sig-gap { height: 32pt; }
+
+/* ══ PAGE 3: QUOTE BREAKDOWN ════════════════════════════════ */
+.page-title { font-size: 16pt; font-weight: 700; color: #111; margin-bottom: 4pt; }
+.page-subtitle { font-size: 9pt; color: #888; margin-bottom: 14pt; }
+
+.scope-tbl { width: 100%; border-collapse: collapse; margin-bottom: 16pt; }
+.scope-tbl th {
+  background: #111;
+  color: #C9A84C;
+  font-size: 8pt;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  padding: 6pt 10pt;
+  text-align: left;
+}
+.scope-tbl td {
+  padding: 7pt 10pt;
+  font-size: 9.5pt;
+  color: #333;
+  border-bottom: 1px solid #eee;
+  vertical-align: top;
+  line-height: 1.5;
+}
+.scope-tbl tr:last-child td { border-bottom: none; }
+.scope-num { color: #C9A84C; font-weight: 600; font-size: 8.5pt; width: 50pt; white-space: nowrap; }
+
+.rule { border: none; border-top: 1px solid #ddd; margin: 14pt 0; }
+
+.price-tbl { width: 240pt; margin-left: auto; border-collapse: collapse; margin-bottom: 16pt; }
+.price-tbl td { padding: 5pt 8pt; font-size: 10pt; }
+.price-tbl .lbl { color: #666; text-align: left; }
+.price-tbl .val { font-weight: 600; color: #111; text-align: right; }
+.price-tbl .total-row td { border-top: 2px solid #C9A84C; padding-top: 7pt; }
+.price-tbl .total-row .lbl { font-weight: 700; color: #111; font-size: 11pt; }
+.price-tbl .total-row .val { font-weight: 900; color: #111; font-size: 12pt; }
+
+.pay-sched {
+  border-left: 3px solid #C9A84C;
+  background: #faf8f2;
+  border: 1px solid #e8e0cc;
+  border-left: 3px solid #C9A84C;
+  padding: 12pt 14pt;
+  margin-top: 14pt;
+}
+.pay-sched h3 { font-size: 10pt; font-weight: 700; color: #111; margin-bottom: 8pt; }
+.pay-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 9.5pt;
+  color: #444;
+  margin-bottom: 5pt;
+}
+.pay-row:last-child { margin-bottom: 0; }
+.pay-amt { font-weight: 700; color: #111; }
+
+/* ══ PAGE 4: TERMS ══════════════════════════════════════════ */
+.terms-p { font-size: 9pt; line-height: 1.75; color: #444; margin-bottom: 10pt; }
+.terms-h { font-size: 10pt; font-weight: 700; color: #111; margin: 12pt 0 3pt; }
+
+/* ══ PAGE NUMBER ════════════════════════════════════════════ */
+.pgnum { position: absolute; bottom: 14mm; right: 17mm; font-size: 8pt; color: #bbb; }
+
+@media print {
+  .page { page-break-after: always; break-after: page; }
+  .page:last-child { page-break-after: avoid; break-after: avoid; }
+}
 </style>
 </head>
 <body>
 
-<div class="header">
-  <div>
-    ${logoHtml}
-    <div class="brand-name">${escHtml(bizName)}</div>
-    <div class="gold-bar"></div>
-  </div>
-  <div class="header-right">
-    <strong>FORMAL QUOTE</strong>
-    Date: ${today}<br>
-    Valid Until: ${validUntil}<br>
-    ${contactLines}
-  </div>
-</div>
+<!-- ══════════════════════════════════════════════════════════════
+     PAGE 1 — COVER
+══════════════════════════════════════════════════════════════ -->
+<div class="page cover">
 
-<div class="meta-grid">
-  <div class="meta-box">
-    <div class="meta-label">Prepared For</div>
-    <div class="meta-val">${escHtml(fields.client)}</div>
-    <div style="font-size:9.5pt;color:#555;margin-top:4px">${escHtml(fields.address)}</div>
-  </div>
-  <div class="meta-box">
-    <div class="meta-label">Job Details</div>
-    <div class="meta-val">${escHtml(fields.jobType)}</div>
-    <div style="font-size:9.5pt;color:#555;margin-top:4px">
-      Est. Start: ${fields.startDate || 'TBC'}<br>
-      ${escHtml(fields.brickType)}
+  <div class="cover-top">
+    <div>${logoBlock}</div>
+    <div class="cover-ref-box">
+      <span class="cover-ref-num">${escHtml(quoteRef)}</span>
+      Issue Date: ${today}<br>
+      Valid For: 30 days<br>
+      Expires: ${expires}<br>
+      <span class="cover-total">${fmtCurrency(total)}</span>
     </div>
   </div>
-</div>
 
-<h2>Price Breakdown</h2>
-<table>
-  <thead><tr><th>Item</th><th style="text-align:right">Amount</th></tr></thead>
-  <tbody>
-    <tr><td>Labour — ${escHtml(fields.jobType)}</td><td style="text-align:right">${fmtCurrency(calc.labourCost)}</td></tr>
-    ${fields.includeMaterials ? `<tr><td>Materials (+ ${fields.markup}% markup)</td><td style="text-align:right">${fmtCurrency(calc.materialsCost)}</td></tr>` : ''}
-    ${fields.includeGST ? `<tr><td>GST (10%)</td><td style="text-align:right">${fmtCurrency(calc.gstAmt)}</td></tr>` : ''}
-    <tr class="total-row"><td><strong>TOTAL</strong></td><td style="text-align:right"><strong>${fmtCurrency(calc.total)}</strong></td></tr>
-  </tbody>
-</table>
-
-<div class="payment-box">
-  <h3>Payment Terms</h3>
-  <p>&#9679; Deposit (30%) due on acceptance: <span class="amt">${fmtCurrency(calc.deposit)}</span></p>
-  <p>&#9679; Balance (70%) due on completion: <span class="amt">${fmtCurrency(calc.total - calc.deposit)}</span></p>
-  <p style="margin-top:8px;color:#ccc">${escHtml(bizTerms)}</p>
-</div>
-
-<h2>Full Quote</h2>
-<div class="quote-body">${escHtml(quoteText)}</div>
-
-<div class="sig-section">
-  <div class="sig-box">
-    <div class="sig-label">Client Acceptance</div>
-    <div class="sig-line"></div>
-    <div style="font-size:8pt;color:#aaa;margin-top:6px">Signature &amp; Date</div>
+  <div class="cover-hero">
+    <div class="cover-eyebrow">Formal Quotation</div>
+    <div class="cover-title">Quote for<br>${escHtml(fields.client)}</div>
+    <div class="cover-subtitle">${escHtml(fields.jobType)}${fields.address ? ' &nbsp;·&nbsp; ' + escHtml(fields.address) : ''}</div>
   </div>
-  <div class="sig-box">
-    <div class="sig-label">${escHtml(bizName)}</div>
-    <div class="sig-line"></div>
-    <div style="font-size:8pt;color:#aaa;margin-top:6px">Signature &amp; Date</div>
-  </div>
-</div>
 
-<div class="footer">${escHtml(bizName)} &nbsp;|&nbsp; Thank you for your business</div>
+  <div class="cover-info-grid">
+    <div>
+      <div class="ci-label">Prepared For</div>
+      <div class="ci-val">${escHtml(fields.client)}</div>
+      ${fields.address ? `<div class="ci-sub">${escHtml(fields.address)}</div>` : ''}
+    </div>
+    <div>
+      <div class="ci-label">Project Details</div>
+      <div class="ci-val">${escHtml(fields.jobType)}</div>
+      <div class="ci-sub">
+        Dimensions: ${escHtml(dimDesc)}<br>
+        Est. Start: ${fields.startDate ? escHtml(fields.startDate) : 'TBC'}
+      </div>
+    </div>
+  </div>
+
+  <div class="cover-footer">
+    <span>${escHtml(contactLeft)}</span>
+    <span>${escHtml(contactRight)}</span>
+  </div>
+
+</div><!-- /cover -->
+
+
+<!-- ══════════════════════════════════════════════════════════════
+     PAGE 2 — COVER LETTER
+══════════════════════════════════════════════════════════════ -->
+<div class="page">
+
+  <div class="inner-header">
+    <div class="ih-biz">${escHtml(bizName)}</div>
+    <div class="ih-meta">Ref: ${escHtml(quoteRef)}&nbsp;&nbsp;|&nbsp;&nbsp;${today}</div>
+  </div>
+
+  <div class="letter-date">${todayLong}</div>
+  <div class="letter-greeting">Dear ${escHtml(fields.client)},</div>
+
+  <div class="letter-section-title">Letter of Introduction</div>
+
+  <p class="letter-p">Thank you for the opportunity to provide a quote for your upcoming project.</p>
+
+  <p class="letter-p">At ${escHtml(bizName)}, we take pride in delivering high-quality workmanship with a focus on reliability, precision, and honest service. It&rsquo;s always a privilege to be considered for work, and we appreciate the chance to be part of your plans.</p>
+
+  <p class="letter-p">The attached quote outlines the scope of works discussed and is based on the details provided. If there are any changes needed or you&rsquo;d like to go over anything in more detail, please feel free to get in touch.</p>
+
+  <div class="letter-signoff">
+    Warm regards,
+    <div class="sig-gap"></div>
+    <strong>${escHtml(bizName)}</strong>${bizPhone || bizEmail ? '<br>' : ''}
+    ${[bizPhone, bizEmail].filter(Boolean).map(s => escHtml(s)).join('&nbsp;&nbsp;·&nbsp;&nbsp;')}
+  </div>
+
+  <div class="pgnum">Page 2 of 4</div>
+
+</div><!-- /letter -->
+
+
+<!-- ══════════════════════════════════════════════════════════════
+     PAGE 3 — QUOTE BREAKDOWN
+══════════════════════════════════════════════════════════════ -->
+<div class="page">
+
+  <div class="inner-header">
+    <div class="ih-biz">${escHtml(bizName)}</div>
+    <div class="ih-meta">Ref: ${escHtml(quoteRef)}&nbsp;&nbsp;|&nbsp;&nbsp;${today}</div>
+  </div>
+
+  <div class="page-title">Quote Description</div>
+  <div class="page-subtitle">This is a breakdown of the quote descriptions associated with the project.</div>
+
+  <table class="scope-tbl">
+    <thead>
+      <tr>
+        <th style="width:54pt">Item No.</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${scopeItems.map((item, i) =>
+        `<tr>
+          <td class="scope-num">1.${String(i + 1).padStart(3, '0')}</td>
+          <td>${escHtml(item)}</td>
+        </tr>`
+      ).join('')}
+    </tbody>
+  </table>
+
+  <hr class="rule">
+
+  <table class="price-tbl">
+    <tbody>
+      <tr><td class="lbl">Subtotal</td><td class="val">${fmtCurrency(subtotal)}</td></tr>
+      ${gstAmt > 0 ? `<tr><td class="lbl">GST (10%)</td><td class="val">${fmtCurrency(gstAmt)}</td></tr>` : ''}
+      <tr class="total-row">
+        <td class="lbl">Total</td>
+        <td class="val">${fmtCurrency(total)}</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="pay-sched">
+    <h3>Payment Schedule</h3>
+    <div class="pay-row">
+      <span>30% deposit on acceptance</span>
+      <span class="pay-amt">${fmtCurrency(deposit)}</span>
+    </div>
+    <div class="pay-row">
+      <span>70% balance on completion</span>
+      <span class="pay-amt">${fmtCurrency(balance)}</span>
+    </div>
+  </div>
+
+  <div class="pgnum">Page 3 of 4</div>
+
+</div><!-- /breakdown -->
+
+
+<!-- ══════════════════════════════════════════════════════════════
+     PAGE 4 — TERMS & CONDITIONS
+══════════════════════════════════════════════════════════════ -->
+<div class="page">
+
+  <div class="inner-header">
+    <div class="ih-biz">${escHtml(bizName)}</div>
+    <div class="ih-meta">Ref: ${escHtml(quoteRef)}&nbsp;&nbsp;|&nbsp;&nbsp;${today}</div>
+  </div>
+
+  <div class="page-title">Terms and Conditions</div>
+  <p class="page-subtitle" style="margin-bottom:14pt">Please read the following terms and conditions carefully before accepting this quote.</p>
+
+  <p class="terms-p">This contract outlines the terms and conditions for the construction project between the contractor and the client. It includes details on scope of work, project timeline, payment schedule, and any changes or modifications to the original plan. Both parties agree to adhere to local building regulations and all applicable Australian Standards.</p>
+
+  <div class="terms-h">1. Scope of Work</div>
+  <p class="terms-p">The contractor agrees to complete the work as described in this quote. Any variation to the agreed scope of works must be submitted in writing and approved by both parties before additional work commences. Approved variations may incur additional charges.</p>
+
+  <div class="terms-h">2. Payment</div>
+  <p class="terms-p">A deposit of 30% of the quoted amount is required upon acceptance of this quote before any works commence. The remaining balance of 70% is due upon practical completion. All invoices are payable within 7 days of issue. Overdue accounts may incur interest at 10% per annum. The contractor reserves the right to suspend works if payments are not made in accordance with these terms.</p>
+
+  <div class="terms-h">3. Variations</div>
+  <p class="terms-p">Any changes requested by the client after acceptance of this quote will be treated as a variation. All variations must be agreed in writing prior to the additional work being carried out. The contract price will be adjusted accordingly. The contractor is not obliged to proceed with a variation until it has been formally approved.</p>
+
+  <div class="terms-h">4. Delays &amp; Extensions of Time</div>
+  <p class="terms-p">The contractor will make every reasonable effort to complete the works within the agreed timeframe. Delays caused by inclement weather, restricted site access, client-directed changes, supply disruptions, or circumstances beyond the contractor&rsquo;s reasonable control will extend the project completion date accordingly, without penalty to the contractor.</p>
+
+  <div class="terms-h">5. Liability &amp; Insurance</div>
+  <p class="terms-p">The contractor holds current public liability insurance. The contractor&rsquo;s liability under this agreement is limited to the value of this contract. The contractor accepts no liability for consequential, indirect, or economic loss arising from the works or any delay thereto.</p>
+
+  <div class="terms-h">6. Defects &amp; Warranty</div>
+  <p class="terms-p">The contractor warrants that all works will be carried out in a proper and workmanlike manner, using materials of acceptable quality. Any defects arising directly from the contractor&rsquo;s workmanship reported within 90 days of practical completion will be rectified at no additional charge. This warranty does not cover damage caused by third parties, misuse, or normal wear and tear.</p>
+
+  <div class="terms-h">7. Disputes</div>
+  <p class="terms-p">Any disputes arising from this contract will be subject to the laws of Australia. Both parties agree to attempt good-faith negotiation and mediation before commencing any formal legal proceedings. Nothing in this clause limits either party&rsquo;s rights under applicable Australian consumer protection legislation.</p>
+
+  <div class="terms-h">8. Acceptance</div>
+  <p class="terms-p">This quote is valid for 30 days from the issue date. Acceptance is confirmed by the client&rsquo;s written approval and payment of the deposit. By accepting this quote the client agrees to all terms and conditions stated herein.</p>
+
+  <div class="pgnum">Page 4 of 4</div>
+
+</div><!-- /terms -->
 
 </body>
 </html>`;
 
-  // Open print dialog in a new window
-  const win = window.open('', '_blank', 'width=900,height=700');
+  // Open print window
+  const win = window.open('', '_blank', 'width=900,height=750');
   if (!win) { showToast('Pop-up blocked — allow pop-ups to save PDF', 'error', 5000); return; }
   win.document.write(html);
   win.document.close();
-  win.onload = () => {
-    win.focus();
-    win.print();
-  };
+  win.onload = () => { win.focus(); win.print(); };
 }
 
 // ── My Rates panel ────────────────────────────────────────────────────────────
