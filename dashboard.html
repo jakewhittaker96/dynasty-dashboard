@@ -9,7 +9,6 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 </head>
 <body>
 
@@ -984,6 +983,20 @@
             <div class="qg-field qg-field--full">
               <label class="qg-label">Special Requirements</label>
               <textarea id="qg_special" class="calc-input" rows="2" placeholder="e.g. curved wall, heritage brick, difficult access, scaffolding required…"></textarea>
+            </div>
+          </div>
+
+          <div class="qg-row">
+            <div class="qg-field qg-field--full">
+              <label class="qg-label">Project / Site Photo <span style="font-weight:400;color:var(--text-muted)">(optional — appears on cover page)</span></label>
+              <label class="qg-file-label" id="qgPhotoLabel">
+                <span id="qgPhotoLabelText">&#128247; Choose photo…</span>
+                <input type="file" id="qg_sitePhoto" accept="image/jpeg,image/png,image/webp" style="display:none" />
+              </label>
+              <div id="qgPhotoPreview" style="display:none;margin-top:0.5rem;display:flex;align-items:center;gap:0.75rem">
+                <img id="qgPhotoImg" style="max-height:70px;max-width:120px;border-radius:6px;object-fit:cover;border:1px solid #2a2a2a" />
+                <button type="button" id="qgPhotoClear" style="background:none;border:1px solid #444;color:#aaa;border-radius:6px;padding:0.2rem 0.6rem;cursor:pointer;font-size:0.8rem">&#10005; Remove</button>
+              </div>
             </div>
           </div>
 

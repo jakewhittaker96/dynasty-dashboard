@@ -5211,3 +5211,23 @@ textarea.calc-input { resize: vertical; font-family: inherit; }
   letter-spacing: 0;
   cursor: default;
 }
+
+/* ── Quote generator: file upload label ── */
+.qg-file-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.45rem 0.9rem;
+  background: #111;
+  border: 1px solid #2a2a2a;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  color: #ccc;
+  transition: border-color 0.2s, background 0.2s;
+}
+.qg-file-label:hover {
+  background: #181818;
+  border-color: #C9A84C;
+  color: #fff;
+}
