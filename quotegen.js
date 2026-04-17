@@ -395,8 +395,14 @@ function parseScopeItems(quoteText, fallbackJobType) {
   return items;
 }
 
-// ── PDF generation — 4-page A4 professional quote ────────────────────────────
+// ── PDF generation — 4-page A4 professional quote (jsPDF) ────────────────────
 function generateQuotePDF(quoteText, fields, calc) {
+  // ── Guard: jsPDF must be loaded ────────────────────────────────────────────
+  if (typeof window.jspdf === 'undefined') {
+    showToast('PDF library not loaded — please refresh and try again', 'error', 5000);
+    return;
+  }
+
   // ── Business profile ───────────────────────────────────────────────────────
   const bp      = (typeof loadBusinessProfile === 'function') ? loadBusinessProfile() : {};
   const bizName = bp.name    || 'Dynasty Bricklaying & Pressure Cleaning';
@@ -409,423 +415,356 @@ function generateQuotePDF(quoteText, fields, calc) {
   // ── Dates ──────────────────────────────────────────────────────────────────
   const today     = new Date().toLocaleDateString('en-AU', { day: '2-digit', month: '2-digit', year: 'numeric' });
   const todayLong = new Date().toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' });
-  const expires   = new Date(Date.now() + 30 * 86400000).toLocaleDateString('en-AU', { day: '2-digit', month: '2-digit', year: 'numeric' });
 
   // ── Quote reference ────────────────────────────────────────────────────────
   const refMatch = quoteText.match(/Q[A-Z]-?(\d{4,6})/i);
   const rawRef   = refMatch ? refMatch[1] : String(Math.floor(1000 + Math.random() * 9000));
   const quoteRef = 'Q-' + rawRef.substring(0, 5).padStart(4, '0');
 
-  // ── Logo block (page 1 top-left) ───────────────────────────────────────────
-  const logoBlock = bizLogo
-    ? `<img src="${bizLogo}" style="max-height:60px;max-width:200px;object-fit:contain;display:block">`
-    : `<div class="cover-logo-name">${escHtml(bizName)}</div>`;
-
-  // ── Contact footer string (page 1 bottom) ──────────────────────────────────
-  const contactLeft  = [bizABN ? 'ABN ' + bizABN : '', bizAddr].filter(Boolean).join('  ·  ');
-  const contactRight = [bizPhone, bizEmail].filter(Boolean).join('  ·  ');
-
-  // ── Parsed scope items ─────────────────────────────────────────────────────
+  // ── Parsed scope items + pricing ──────────────────────────────────────────
   const scopeItems = parseScopeItems(quoteText, fields.jobType);
+  const subtotal   = calc.subtotal;
+  const gstAmt     = calc.gstAmt;
+  const total      = calc.total;
+  const deposit    = calc.deposit;
+  const balance    = total - deposit;
 
-  // ── Pricing ────────────────────────────────────────────────────────────────
-  const subtotal = calc.subtotal;
-  const gstAmt   = calc.gstAmt;
-  const total    = calc.total;
-  const deposit  = calc.deposit;
-  const balance  = total - deposit;
+  // ── Build document ────────────────────────────────────────────────────────
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
 
-  // ── Dimension description ──────────────────────────────────────────────────
-  const dimDesc = fields.dimMode === 'area'
-    ? `${fields.area} m²`
-    : `${fields.length}m × ${fields.height}m`;
+  const W  = 210, H = 297;
+  const ML = 17, MR = 17;
+  const TW = W - ML - MR;
 
-  const html = `<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<title>${escHtml(bizName)} — ${escHtml(quoteRef)}</title>
-<style>
-/* ── Reset ── */
-* { margin:0; padding:0; box-sizing:border-box; }
-body { font-family: Helvetica, Arial, sans-serif; font-size:10pt; color:#222; background:#fff; }
-@page { size: A4; margin: 0; }
+  // ── Colour/style helpers ───────────────────────────────────────────────────
+  function tc(r, g, b)  { doc.setTextColor(r, g, b); }
+  function fc(r, g, b)  { doc.setFillColor(r, g, b); }
+  function dc(r, g, b)  { doc.setDrawColor(r, g, b); }
+  function gold()       { tc(201, 168, 76); }
+  function white()      { tc(255, 255, 255); }
+  function dark()       { tc(25, 25, 25); }
+  function grey()       { tc(110, 110, 110); }
+  function lgrey()      { tc(180, 180, 180); }
 
-/* ── Page container ── */
-.page {
-  width: 210mm;
-  min-height: 297mm;
-  padding: 18mm 17mm 24mm;
-  position: relative;
-  background: #fff;
-  page-break-after: always;
-  break-after: page;
-}
-.page:last-child { page-break-after: avoid; break-after: avoid; }
+  function pgNum(n) {
+    tc(100, 100, 100);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7);
+    doc.text('Page ' + n + ' of 4', W - MR, H - 10, { align: 'right' });
+  }
 
-/* ══ PAGE 1: COVER ══════════════════════════════════════════ */
-.cover { background: #0d0d0d; color: #f0f0f0; }
+  // Gold top bar header for pages 2-4
+  function innerHeader() {
+    fc(201, 168, 76);
+    doc.rect(0, 0, W, 13, 'F');
+    tc(25, 25, 25);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9);
+    doc.text(bizName, ML, 9);
+    doc.setFont('helvetica', 'normal');
+    doc.text('Ref: ' + quoteRef + '   |   ' + today, W - MR, 9, { align: 'right' });
+    return 24;
+  }
 
-.cover-top {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  padding-bottom: 14pt;
-  margin-bottom: 0;
-}
-.cover-logo-name {
-  font-size: 20pt;
-  font-weight: 700;
-  color: #ffffff;
-  line-height: 1.2;
-}
-.cover-divider {
-  width: 100%;
-  border: none;
-  border-top: 1pt solid #C9A84C;
-  margin: 0 0 36pt;
-}
-.cover-ref-box {
-  text-align: right;
-  font-size: 9pt;
-  line-height: 2;
-  color: #cccccc;
-}
-.cover-ref-num {
-  display: block;
-  font-size: 10pt;
-  font-weight: 700;
-  color: #C9A84C;
-  margin-bottom: 2pt;
-}
-.cover-ref-total {
-  display: block;
-  font-size: 14pt;
-  font-weight: 700;
-  color: #C9A84C;
-  margin-top: 4pt;
-  letter-spacing: -0.3px;
-}
+  // ════════════════════════════════════════════════════════════════════════════
+  //  PAGE 1 — DARK COVER
+  // ════════════════════════════════════════════════════════════════════════════
 
-.cover-hero { margin: 0 0 0; }
-.cover-job-title {
-  font-size: 32pt;
-  font-weight: 700;
-  color: #ffffff;
-  line-height: 1.1;
-  letter-spacing: -0.5px;
-  margin-bottom: 10pt;
-}
-.cover-address {
-  font-size: 14pt;
-  color: #C9A84C;
-  margin-bottom: 14pt;
-  line-height: 1.4;
-}
-.cover-prepared {
-  font-size: 11pt;
-  color: #cccccc;
-  line-height: 1.6;
-}
-.cover-prepared strong { color: #C9A84C; font-weight: 700; }
+  // Fill entire page black — must be FIRST
+  fc(13, 13, 13);
+  doc.rect(0, 0, 210, 297, 'F');
 
-.cover-contact-strip {
-  position: absolute;
-  bottom: 26mm;
-  left: 17mm;
-  right: 17mm;
-  border-top: 1px solid #1e1e1e;
-  padding-top: 8pt;
-  text-align: center;
-  font-size: 8pt;
-  color: #555555;
-  letter-spacing: 0.3px;
-}
-.cover-pgnum {
-  position: absolute;
-  bottom: 14mm;
-  right: 17mm;
-  font-size: 8pt;
-  color: #444444;
-}
+  // Business logo / name — top-left
+  if (bizLogo) {
+    try {
+      const fmt = bizLogo.startsWith('data:image/png') ? 'PNG' : 'JPEG';
+      doc.addImage(bizLogo, fmt, ML, 14, 50, 16, undefined, 'FAST');
+    } catch (_) {
+      white();
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(16);
+      doc.text(bizName, ML, 24);
+    }
+  } else {
+    white();
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(16);
+    doc.text(bizName, ML, 24);
+  }
 
-/* ══ INNER PAGE HEADER (pages 2-4) ══════════════════════════ */
-.inner-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-end;
-  padding-bottom: 9pt;
-  margin-bottom: 18pt;
-  border-bottom: 1px solid #ddd;
-}
-.ih-biz { font-size: 10.5pt; font-weight: 700; color: #111; }
-.ih-meta { font-size: 8pt; color: #888; text-align: right; line-height: 1.65; }
+  // Reference block — top-right
+  gold();
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9);
+  doc.text('Reference: ' + quoteRef, W - MR, 20, { align: 'right' });
 
-/* ══ PAGE 2: COVER LETTER ═══════════════════════════════════ */
-.letter-date { font-size: 10pt; color: #555; margin-bottom: 20pt; }
-.letter-greeting { font-size: 10pt; font-weight: 600; color: #111; margin-bottom: 16pt; }
-.letter-section-title {
-  font-size: 14pt;
-  font-weight: 700;
-  color: #111;
-  margin-bottom: 12pt;
-  border-left: 3px solid #C9A84C;
-  padding-left: 10pt;
-}
-.letter-p { font-size: 10pt; line-height: 1.8; color: #333; margin-bottom: 11pt; }
-.letter-signoff { font-size: 10pt; line-height: 1.9; color: #333; margin-top: 26pt; }
-.sig-gap { height: 32pt; }
+  tc(200, 200, 200);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  doc.text('Issue Date: ' + today,  W - MR, 26, { align: 'right' });
+  doc.text('Valid For: 30 days',     W - MR, 31, { align: 'right' });
 
-/* ══ PAGE 3: QUOTE BREAKDOWN ════════════════════════════════ */
-.page-title { font-size: 16pt; font-weight: 700; color: #111; margin-bottom: 4pt; }
-.page-subtitle { font-size: 9pt; color: #888; margin-bottom: 14pt; }
+  gold();
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(11);
+  doc.text('Total: ' + fmtCurrency(total), W - MR, 39, { align: 'right' });
 
-.scope-tbl { width: 100%; border-collapse: collapse; margin-bottom: 16pt; }
-.scope-tbl th {
-  background: #111;
-  color: #C9A84C;
-  font-size: 8pt;
-  text-transform: uppercase;
-  letter-spacing: 0.8px;
-  padding: 6pt 10pt;
-  text-align: left;
-}
-.scope-tbl td {
-  padding: 7pt 10pt;
-  font-size: 9.5pt;
-  color: #333;
-  border-bottom: 1px solid #eee;
-  vertical-align: top;
-  line-height: 1.5;
-}
-.scope-tbl tr:last-child td { border-bottom: none; }
-.scope-num { color: #C9A84C; font-weight: 600; font-size: 8.5pt; width: 50pt; white-space: nowrap; }
+  // Gold divider line
+  dc(201, 168, 76);
+  doc.setLineWidth(0.6);
+  doc.line(ML, 48, W - MR, 48);
 
-.rule { border: none; border-top: 1px solid #ddd; margin: 14pt 0; }
+  // Job title hero — 36pt bold white, vertically centred
+  white();
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(36);
+  const titleLines = doc.splitTextToSize(fields.jobType, TW);
+  doc.text(titleLines, ML, 140);
 
-.price-tbl { width: 240pt; margin-left: auto; border-collapse: collapse; margin-bottom: 16pt; }
-.price-tbl td { padding: 5pt 8pt; font-size: 10pt; }
-.price-tbl .lbl { color: #666; text-align: left; }
-.price-tbl .val { font-weight: 600; color: #111; text-align: right; }
-.price-tbl .total-row td { border-top: 2px solid #C9A84C; padding-top: 7pt; }
-.price-tbl .total-row .lbl { font-weight: 700; color: #111; font-size: 11pt; }
-.price-tbl .total-row .val { font-weight: 900; color: #111; font-size: 12pt; }
+  // Address — gold, below title
+  let heroY = 140 + (titleLines.length - 1) * 14 + 12;
+  if (fields.address) {
+    gold();
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(13);
+    const addrLines = doc.splitTextToSize(fields.address, TW);
+    doc.text(addrLines, ML, heroY);
+    heroY += addrLines.length * 6 + 7;
+  }
 
-.pay-sched {
-  border-left: 3px solid #C9A84C;
-  background: #faf8f2;
-  border: 1px solid #e8e0cc;
-  border-left: 3px solid #C9A84C;
-  padding: 12pt 14pt;
-  margin-top: 14pt;
-}
-.pay-sched h3 { font-size: 10pt; font-weight: 700; color: #111; margin-bottom: 8pt; }
-.pay-row {
-  display: flex;
-  justify-content: space-between;
-  font-size: 9.5pt;
-  color: #444;
-  margin-bottom: 5pt;
-}
-.pay-row:last-child { margin-bottom: 0; }
-.pay-amt { font-weight: 700; color: #111; }
+  // Prepared for
+  lgrey();
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(10);
+  const prepLabel = 'Prepared for: ';
+  doc.text(prepLabel, ML, heroY);
+  gold();
+  doc.setFont('helvetica', 'bold');
+  doc.text(fields.client, ML + doc.getTextWidth(prepLabel), heroY);
 
-/* ══ PAGE 4: TERMS ══════════════════════════════════════════ */
-.terms-p { font-size: 9pt; line-height: 1.75; color: #444; margin-bottom: 10pt; }
-.terms-h { font-size: 10pt; font-weight: 700; color: #111; margin: 12pt 0 3pt; }
+  // Contact strip — bottom
+  const contactParts = [bizPhone, bizEmail].filter(Boolean);
+  if (contactParts.length) {
+    dc(35, 35, 35);
+    doc.setLineWidth(0.3);
+    doc.line(ML, H - 28, W - MR, H - 28);
+    tc(85, 85, 85);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7);
+    doc.text(contactParts.join('   |   '), W / 2, H - 23, { align: 'center' });
+  }
 
-/* ══ PAGE NUMBER ════════════════════════════════════════════ */
-.pgnum { position: absolute; bottom: 14mm; right: 17mm; font-size: 8pt; color: #bbb; }
+  pgNum(1);
 
-@media print {
-  .page { page-break-after: always; break-after: page; }
-  .page:last-child { page-break-after: avoid; break-after: avoid; }
-}
-</style>
-</head>
-<body>
+  // ════════════════════════════════════════════════════════════════════════════
+  //  PAGE 2 — COVER LETTER
+  // ════════════════════════════════════════════════════════════════════════════
+  doc.addPage();
+  fc(255, 255, 255);
+  doc.rect(0, 0, 210, 297, 'F');
 
-<!-- ══════════════════════════════════════════════════════════════
-     PAGE 1 — COVER
-══════════════════════════════════════════════════════════════ -->
-<div class="page cover">
+  let y = innerHeader();
 
-  <!-- Top row: logo/name left · ref block right -->
-  <div class="cover-top">
-    <div>${logoBlock}</div>
-    <div class="cover-ref-box">
-      <span class="cover-ref-num">Reference: ${escHtml(quoteRef)}</span>
-      Issue Date: ${today}<br>
-      Valid For: 30 days<br>
-      <span class="cover-ref-total">Total: ${fmtCurrency(total)}</span>
-    </div>
-  </div>
+  dark();
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9);
+  doc.text(todayLong, ML, y);
+  y += 8;
+  doc.text('Dear ' + fields.client + ',', ML, y);
+  y += 10;
 
-  <!-- Full-width gold divider -->
-  <hr class="cover-divider">
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(11);
+  doc.text('Letter of Introduction', ML, y);
+  y += 8;
 
-  <!-- Hero: job type, address, prepared for -->
-  <div class="cover-hero">
-    <div class="cover-job-title">${escHtml(fields.jobType)}</div>
-    ${fields.address ? `<div class="cover-address">${escHtml(fields.address)}</div>` : ''}
-    <div class="cover-prepared">Prepared for: <strong>${escHtml(fields.client)}</strong></div>
-  </div>
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9);
 
-  <!-- Bottom contact strip -->
-  <div class="cover-contact-strip">
-    ${[bizPhone, bizEmail].filter(Boolean).map(s => escHtml(s)).join('&nbsp;&nbsp;|&nbsp;&nbsp;')}
-  </div>
+  const letterParas = [
+    'Thank you for the opportunity to provide a quote for your upcoming project.',
+    'At ' + bizName + ', we take pride in delivering high-quality workmanship with a focus on reliability, precision, and honest service. It\u2019s always a privilege to be considered for work, and we appreciate the chance to be part of your plans.',
+    'The attached quote outlines the scope of works discussed and is based on the details provided. If there are any changes needed or you\u2019d like to go over anything in more detail, please feel free to get in touch.',
+  ];
 
-  <div class="cover-pgnum">Page 1 of 4</div>
+  for (const para of letterParas) {
+    dark();
+    const lines = doc.splitTextToSize(para, TW);
+    doc.text(lines, ML, y);
+    y += lines.length * 5 + 6;
+  }
 
-</div><!-- /cover -->
+  y += 6;
+  dark();
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9);
+  doc.text('Warm regards,', ML, y);
+  y += 16;
+  doc.setFont('helvetica', 'bold');
+  doc.text(bizName, ML, y);
+  y += 5;
+  doc.setFont('helvetica', 'normal');
+  const p2Contact = [bizPhone, bizEmail].filter(Boolean).join('  \u00B7  ');
+  if (p2Contact) doc.text(p2Contact, ML, y);
 
+  pgNum(2);
 
-<!-- ══════════════════════════════════════════════════════════════
-     PAGE 2 — COVER LETTER
-══════════════════════════════════════════════════════════════ -->
-<div class="page">
+  // ════════════════════════════════════════════════════════════════════════════
+  //  PAGE 3 — QUOTE BREAKDOWN
+  // ════════════════════════════════════════════════════════════════════════════
+  doc.addPage();
+  fc(255, 255, 255);
+  doc.rect(0, 0, 210, 297, 'F');
 
-  <div class="inner-header">
-    <div class="ih-biz">${escHtml(bizName)}</div>
-    <div class="ih-meta">Ref: ${escHtml(quoteRef)}&nbsp;&nbsp;|&nbsp;&nbsp;${today}</div>
-  </div>
+  y = innerHeader();
 
-  <div class="letter-date">${todayLong}</div>
-  <div class="letter-greeting">Dear ${escHtml(fields.client)},</div>
+  dark();
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(14);
+  doc.text('Quote Description', ML, y);
+  y += 5;
+  grey();
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  doc.text('This is a breakdown of the quote descriptions associated with the project.', ML, y);
+  y += 9;
 
-  <div class="letter-section-title">Letter of Introduction</div>
+  // Scope table header
+  fc(240, 240, 240);
+  doc.rect(ML, y, TW, 7, 'F');
+  dark();
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8);
+  doc.text('Item No.', ML + 2, y + 5);
+  doc.text('Description', ML + 26, y + 5);
+  y += 7;
 
-  <p class="letter-p">Thank you for the opportunity to provide a quote for your upcoming project.</p>
+  // Scope rows
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  for (let i = 0; i < scopeItems.length; i++) {
+    const itemNum   = '1.' + String(i + 1).padStart(3, '0');
+    const descLines = doc.splitTextToSize(scopeItems[i], TW - 28);
+    const rowH      = Math.max(7, descLines.length * 4.5 + 3);
+    if (i % 2 === 1) { fc(250, 250, 250); doc.rect(ML, y, TW, rowH, 'F'); }
+    dark();
+    doc.text(itemNum,   ML + 2,  y + 5);
+    doc.text(descLines, ML + 26, y + 5);
+    y += rowH;
+    if (y > H - 65) break;
+  }
 
-  <p class="letter-p">At ${escHtml(bizName)}, we take pride in delivering high-quality workmanship with a focus on reliability, precision, and honest service. It&rsquo;s always a privilege to be considered for work, and we appreciate the chance to be part of your plans.</p>
+  y += 7;
+  dc(210, 210, 210);
+  doc.setLineWidth(0.3);
+  doc.line(ML, y, W - MR, y);
+  y += 9;
 
-  <p class="letter-p">The attached quote outlines the scope of works discussed and is based on the details provided. If there are any changes needed or you&rsquo;d like to go over anything in more detail, please feel free to get in touch.</p>
+  // Price rows
+  const priceRows = [
+    ['Subtotal', fmtCurrency(subtotal), false],
+    ...(gstAmt > 0 ? [['GST (10%)', fmtCurrency(gstAmt), false]] : []),
+    ['Total', fmtCurrency(total), true],
+  ];
+  for (const [label, val, isBold] of priceRows) {
+    doc.setFont('helvetica', isBold ? 'bold' : 'normal');
+    doc.setFontSize(isBold ? 10 : 9);
+    isBold ? dark() : grey();
+    doc.text(label, W - MR - 52, y);
+    dark();
+    doc.text(val, W - MR, y, { align: 'right' });
+    y += 7;
+  }
 
-  <div class="letter-signoff">
-    Warm regards,
-    <div class="sig-gap"></div>
-    <strong>${escHtml(bizName)}</strong>${bizPhone || bizEmail ? '<br>' : ''}
-    ${[bizPhone, bizEmail].filter(Boolean).map(s => escHtml(s)).join('&nbsp;&nbsp;·&nbsp;&nbsp;')}
-  </div>
+  y += 6;
+  fc(247, 247, 247);
+  doc.rect(ML, y, TW, 28, 'F');
+  dark();
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9);
+  doc.text('Payment Schedule', ML + 4, y + 7);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  doc.text('30% deposit on acceptance',  ML + 4, y + 15);
+  doc.text(fmtCurrency(deposit),  W - MR - 4, y + 15, { align: 'right' });
+  doc.text('70% balance on completion', ML + 4, y + 22);
+  doc.text(fmtCurrency(balance),  W - MR - 4, y + 22, { align: 'right' });
 
-  <div class="pgnum">Page 2 of 4</div>
+  pgNum(3);
 
-</div><!-- /letter -->
+  // ════════════════════════════════════════════════════════════════════════════
+  //  PAGE 4 — TERMS & CONDITIONS
+  // ════════════════════════════════════════════════════════════════════════════
+  doc.addPage();
+  fc(255, 255, 255);
+  doc.rect(0, 0, 210, 297, 'F');
 
+  y = innerHeader();
 
-<!-- ══════════════════════════════════════════════════════════════
-     PAGE 3 — QUOTE BREAKDOWN
-══════════════════════════════════════════════════════════════ -->
-<div class="page">
+  dark();
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(14);
+  doc.text('Terms and Conditions', ML, y);
+  y += 5;
+  grey();
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  const tcSubLines = doc.splitTextToSize(
+    'Please read the following terms and conditions carefully before accepting this quote.', TW
+  );
+  doc.text(tcSubLines, ML, y);
+  y += tcSubLines.length * 4 + 6;
 
-  <div class="inner-header">
-    <div class="ih-biz">${escHtml(bizName)}</div>
-    <div class="ih-meta">Ref: ${escHtml(quoteRef)}&nbsp;&nbsp;|&nbsp;&nbsp;${today}</div>
-  </div>
+  dark();
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  const tcIntroLines = doc.splitTextToSize(
+    'This contract outlines the terms and conditions for the construction project between the contractor and the client. It includes details on scope of work, project timeline, payment schedule, and any changes or modifications to the original plan. Both parties agree to adhere to local building regulations and all applicable Australian Standards.',
+    TW
+  );
+  doc.text(tcIntroLines, ML, y);
+  y += tcIntroLines.length * 4 + 6;
 
-  <div class="page-title">Quote Description</div>
-  <div class="page-subtitle">This is a breakdown of the quote descriptions associated with the project.</div>
+  const tcSections = [
+    ['1. Scope of Work',
+     'The contractor agrees to complete the work as described in this quote. Any variation to the agreed scope of works must be submitted in writing and approved by both parties before additional work commences. Approved variations may incur additional charges.'],
+    ['2. Payment',
+     'A deposit of 30% of the quoted amount is required upon acceptance of this quote before any works commence. The remaining balance of 70% is due upon practical completion. All invoices are payable within 7 days of issue. Overdue accounts may incur interest at 10% per annum. The contractor reserves the right to suspend works if payments are not made in accordance with these terms.'],
+    ['3. Variations',
+     'Any changes requested by the client after acceptance of this quote will be treated as a variation. All variations must be agreed in writing prior to the additional work being carried out. The contract price will be adjusted accordingly. The contractor is not obliged to proceed with a variation until it has been formally approved.'],
+    ['4. Delays & Extensions of Time',
+     'The contractor will make every reasonable effort to complete the works within the agreed timeframe. Delays caused by inclement weather, restricted site access, client-directed changes, supply disruptions, or circumstances beyond the contractor\u2019s reasonable control will extend the project completion date accordingly, without penalty to the contractor.'],
+    ['5. Liability & Insurance',
+     'The contractor holds current public liability insurance. The contractor\u2019s liability under this agreement is limited to the value of this contract. The contractor accepts no liability for consequential, indirect, or economic loss arising from the works or any delay thereto.'],
+    ['6. Defects & Warranty',
+     'The contractor warrants that all works will be carried out in a proper and workmanlike manner, using materials of acceptable quality. Any defects arising directly from the contractor\u2019s workmanship reported within 90 days of practical completion will be rectified at no additional charge. This warranty does not cover damage caused by third parties, misuse, or normal wear and tear.'],
+    ['7. Disputes',
+     'Any disputes arising from this contract will be subject to the laws of Australia. Both parties agree to attempt good-faith negotiation and mediation before commencing any formal legal proceedings. Nothing in this clause limits either party\u2019s rights under applicable Australian consumer protection legislation.'],
+    ['8. Acceptance',
+     'This quote is valid for 30 days from the issue date. Acceptance is confirmed by the client\u2019s written approval and payment of the deposit. By accepting this quote the client agrees to all terms and conditions stated herein.'],
+  ];
 
-  <table class="scope-tbl">
-    <thead>
-      <tr>
-        <th style="width:54pt">Item No.</th>
-        <th>Description</th>
-      </tr>
-    </thead>
-    <tbody>
-      ${scopeItems.map((item, i) =>
-        `<tr>
-          <td class="scope-num">1.${String(i + 1).padStart(3, '0')}</td>
-          <td>${escHtml(item)}</td>
-        </tr>`
-      ).join('')}
-    </tbody>
-  </table>
+  for (const [heading, body] of tcSections) {
+    if (y > H - 28) break;
+    dark();
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8.5);
+    doc.text(heading, ML, y);
+    y += 5;
+    grey();
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    const bLines = doc.splitTextToSize(body, TW);
+    doc.text(bLines, ML, y);
+    y += bLines.length * 4 + 5;
+  }
 
-  <hr class="rule">
+  pgNum(4);
 
-  <table class="price-tbl">
-    <tbody>
-      <tr><td class="lbl">Subtotal</td><td class="val">${fmtCurrency(subtotal)}</td></tr>
-      ${gstAmt > 0 ? `<tr><td class="lbl">GST (10%)</td><td class="val">${fmtCurrency(gstAmt)}</td></tr>` : ''}
-      <tr class="total-row">
-        <td class="lbl">Total</td>
-        <td class="val">${fmtCurrency(total)}</td>
-      </tr>
-    </tbody>
-  </table>
-
-  <div class="pay-sched">
-    <h3>Payment Schedule</h3>
-    <div class="pay-row">
-      <span>30% deposit on acceptance</span>
-      <span class="pay-amt">${fmtCurrency(deposit)}</span>
-    </div>
-    <div class="pay-row">
-      <span>70% balance on completion</span>
-      <span class="pay-amt">${fmtCurrency(balance)}</span>
-    </div>
-  </div>
-
-  <div class="pgnum">Page 3 of 4</div>
-
-</div><!-- /breakdown -->
-
-
-<!-- ══════════════════════════════════════════════════════════════
-     PAGE 4 — TERMS & CONDITIONS
-══════════════════════════════════════════════════════════════ -->
-<div class="page">
-
-  <div class="inner-header">
-    <div class="ih-biz">${escHtml(bizName)}</div>
-    <div class="ih-meta">Ref: ${escHtml(quoteRef)}&nbsp;&nbsp;|&nbsp;&nbsp;${today}</div>
-  </div>
-
-  <div class="page-title">Terms and Conditions</div>
-  <p class="page-subtitle" style="margin-bottom:14pt">Please read the following terms and conditions carefully before accepting this quote.</p>
-
-  <p class="terms-p">This contract outlines the terms and conditions for the construction project between the contractor and the client. It includes details on scope of work, project timeline, payment schedule, and any changes or modifications to the original plan. Both parties agree to adhere to local building regulations and all applicable Australian Standards.</p>
-
-  <div class="terms-h">1. Scope of Work</div>
-  <p class="terms-p">The contractor agrees to complete the work as described in this quote. Any variation to the agreed scope of works must be submitted in writing and approved by both parties before additional work commences. Approved variations may incur additional charges.</p>
-
-  <div class="terms-h">2. Payment</div>
-  <p class="terms-p">A deposit of 30% of the quoted amount is required upon acceptance of this quote before any works commence. The remaining balance of 70% is due upon practical completion. All invoices are payable within 7 days of issue. Overdue accounts may incur interest at 10% per annum. The contractor reserves the right to suspend works if payments are not made in accordance with these terms.</p>
-
-  <div class="terms-h">3. Variations</div>
-  <p class="terms-p">Any changes requested by the client after acceptance of this quote will be treated as a variation. All variations must be agreed in writing prior to the additional work being carried out. The contract price will be adjusted accordingly. The contractor is not obliged to proceed with a variation until it has been formally approved.</p>
-
-  <div class="terms-h">4. Delays &amp; Extensions of Time</div>
-  <p class="terms-p">The contractor will make every reasonable effort to complete the works within the agreed timeframe. Delays caused by inclement weather, restricted site access, client-directed changes, supply disruptions, or circumstances beyond the contractor&rsquo;s reasonable control will extend the project completion date accordingly, without penalty to the contractor.</p>
-
-  <div class="terms-h">5. Liability &amp; Insurance</div>
-  <p class="terms-p">The contractor holds current public liability insurance. The contractor&rsquo;s liability under this agreement is limited to the value of this contract. The contractor accepts no liability for consequential, indirect, or economic loss arising from the works or any delay thereto.</p>
-
-  <div class="terms-h">6. Defects &amp; Warranty</div>
-  <p class="terms-p">The contractor warrants that all works will be carried out in a proper and workmanlike manner, using materials of acceptable quality. Any defects arising directly from the contractor&rsquo;s workmanship reported within 90 days of practical completion will be rectified at no additional charge. This warranty does not cover damage caused by third parties, misuse, or normal wear and tear.</p>
-
-  <div class="terms-h">7. Disputes</div>
-  <p class="terms-p">Any disputes arising from this contract will be subject to the laws of Australia. Both parties agree to attempt good-faith negotiation and mediation before commencing any formal legal proceedings. Nothing in this clause limits either party&rsquo;s rights under applicable Australian consumer protection legislation.</p>
-
-  <div class="terms-h">8. Acceptance</div>
-  <p class="terms-p">This quote is valid for 30 days from the issue date. Acceptance is confirmed by the client&rsquo;s written approval and payment of the deposit. By accepting this quote the client agrees to all terms and conditions stated herein.</p>
-
-  <div class="pgnum">Page 4 of 4</div>
-
-</div><!-- /terms -->
-
-</body>
-</html>`;
-
-  // Open print window
-  const win = window.open('', '_blank', 'width=900,height=750');
-  if (!win) { showToast('Pop-up blocked — allow pop-ups to save PDF', 'error', 5000); return; }
-  win.document.write(html);
-  win.document.close();
-  win.onload = () => { win.focus(); win.print(); };
+  // ── Save PDF ───────────────────────────────────────────────────────────────
+  const fname = (bizName + ' - ' + quoteRef).replace(/[^\w\s\-]/g, '').replace(/\s+/g, '_') + '.pdf';
+  doc.save(fname);
 }
 
 // ── My Rates panel ────────────────────────────────────────────────────────────
