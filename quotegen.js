@@ -34,6 +34,34 @@ const JOB_RATE_LABELS = {
   'Other':          '$ per m²',
 };
 
+// ── Strip markdown symbols from text ─────────────────────────────────────────
+function stripMarkdown(text) {
+  return (text || '')
+    // Table rows — any line that contains | characters
+    .replace(/^[^\n]*\|[^\n]*$/gm, '')
+    // Horizontal rules: ---, ===, ───
+    .replace(/^[-=─*]{3,}\s*$/gm, '')
+    // ATX headings: # ## ### etc.
+    .replace(/^#{1,6}\s+/gm, '')
+    // Bold: **text** or __text__
+    .replace(/\*\*([^*\n]+)\*\*/g, '$1')
+    .replace(/__([^_\n]+)__/g, '$1')
+    // Italic: *text* or _text_
+    .replace(/\*([^*\n]+)\*/g, '$1')
+    .replace(/_([^_\n]+)_/g, '$1')
+    // Blockquotes: > ...
+    .replace(/^>\s*/gm, '')
+    // Inline code: `code`
+    .replace(/`([^`]+)`/g, '$1')
+    // Fenced code blocks
+    .replace(/```[\s\S]*?```/g, '')
+    // Remaining stray pipe characters
+    .replace(/\|/g, '')
+    // Collapse 3+ blank lines → double newline
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
 // ── Saved rates helpers ───────────────────────────────────────────────────────
 function loadMyRates() {
   try { return JSON.parse(localStorage.getItem(RATES_KEY) || '{}'); } catch { return {}; }
@@ -304,11 +332,9 @@ Keep it professional, clear, and practical. Australian English throughout.`;
     );
 
     if (textEl) {
-      textEl.innerHTML = `<div class="qg-quote-output">${escHtml(reply)
-        .replace(/\n/g, '<br>')
-        .replace(/─+|={3,}|-{3,}/g, '<hr class="qg-hr">')
-        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-      }</div>`;
+      // Strip all markdown symbols — show clean plain text only
+      const cleanReply = stripMarkdown(reply);
+      textEl.innerHTML = `<div class="qg-quote-output">${escHtml(cleanReply).replace(/\n/g, '<br>')}</div>`;
     }
 
     // Wire Copy button
@@ -340,14 +366,14 @@ function parseScopeItems(quoteText, fallbackJobType) {
   );
   const source = scopeMatch ? scopeMatch[1] : quoteText;
 
-  // 2. Extract lines that look like scope items
+  // 2. Extract lines that look like scope items, stripped of markdown
   const lines = source
     .split('\n')
-    .map(l => l.replace(/^\s*[\u2022\-\*\d]+[.):\s]*/u, '').trim()) // strip bullets + numbering
+    .map(l => stripMarkdown(l).replace(/^\s*[\u2022\-\*\d]+[.):\s]*/u, '').trim())
     .filter(l =>
       l.length > 12 &&
       !/^(scope of work|materials|labour|price breakdown|payment|exclusion|acceptance|dynasty|quote ref|date:|valid|prepared|client:|address:|job type|rate:|gst:|deposit|balance|thank you)/i.test(l) &&
-      !/^[─=\-]{3,}$/.test(l)
+      !/^[─=\-|]{3,}$/.test(l)
     );
 
   // 3. Deduplicate, max 12 items

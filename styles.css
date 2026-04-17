@@ -2827,15 +2827,28 @@ select.settings-input option {
 }
 .calc-input {
   width: 100%;
-  background: rgba(255,255,255,0.04);
-  border: 1px solid var(--border-dim);
-  border-radius: 6px;
+  background: #0a0a0a;
+  border: 1px solid #2a2a2a;
+  border-radius: 8px;
   padding: 0.45rem 0.7rem;
-  color: var(--text-main);
+  color: #ffffff;
   font-size: 0.83rem;
   box-sizing: border-box;
+  font-family: var(--font);
+  transition: border-color 0.15s;
 }
-.calc-input:focus { outline: none; border-color: rgba(201,168,76,0.4); }
+.calc-input:focus { outline: none; border-color: #C9A84C; }
+.calc-input::placeholder { color: #444; }
+select.calc-input {
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23666' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.75rem center;
+  padding-right: 2.25rem;
+}
+select.calc-input option { background: #111111; color: #ffffff; }
 textarea.calc-input { resize: vertical; font-family: inherit; }
 .calc-run-btn {
   width: 100%;
