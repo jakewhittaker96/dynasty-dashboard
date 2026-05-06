@@ -783,4 +783,3 @@ async function loadServiceM8Data(tabKey) {
     console.error('[Dynasty] ServiceM8 fetch failed:', err);
   }
 }
-Fix: use payment_received_stamp for cash basis
