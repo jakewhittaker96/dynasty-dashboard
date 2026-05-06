@@ -75,13 +75,27 @@ function calcJobsRevenue(jobs) {
     const s = (j.date || '').substring(0, 10);
     return s ? new Date(s + 'T00:00:00') : null;
   };
-  const doneJobs = jobs.filter(j => j.status === 'Completed');
-  const inRange  = (j, start, end) => { const d = jobDate(j); return d && d >= start && (!end || d < end); };
+  // Cash-basis date: when payment was actually received (ServiceM8 `payment_date` field).
+  // Falls back to job date only if payment_date is missing on a paid job.
+  const paymentDate = j => {
+    const raw = (j.payment_date || '').substring(0, 10);
+    if (raw && raw !== '0000-00-00') return new Date(raw + 'T00:00:00');
+    return null;
+  };
 
-  const thisMonth = sumAmount(doneJobs.filter(j => inRange(j, thisMonthStart)));
-  const lastMonth = sumAmount(doneJobs.filter(j => inRange(j, lastMonthStart, lastMonthEnd)));
-  const ytd       = sumAmount(doneJobs.filter(j => inRange(j, ytdStart)));
-  const fytd      = sumAmount(doneJobs.filter(j => inRange(j, fyStart)));
+  const doneJobs = jobs.filter(j => j.status === 'Completed');
+  const paidJobs = jobs.filter(j => isPaid(j) && paymentDate(j));
+  const inRange  = (j, start, end) => { const d = jobDate(j); return d && d >= start && (!end || d < end); };
+  const inPayRange = (j, start, end) => {
+    const d = paymentDate(j);
+    return d && d >= start && (!end || d < end);
+  };
+
+  // Cash-basis tiles — driven by payment_date, not job creation date.
+  const thisMonth = sumAmount(paidJobs.filter(j => inPayRange(j, thisMonthStart)));
+  const lastMonth = sumAmount(paidJobs.filter(j => inPayRange(j, lastMonthStart, lastMonthEnd)));
+  const ytd       = sumAmount(paidJobs.filter(j => inPayRange(j, ytdStart)));
+  const fytd      = sumAmount(paidJobs.filter(j => inPayRange(j, fyStart)));
 
   const MS_PER_DAY = 1000 * 60 * 60 * 24;
   const projYTD    = (ytd  / Math.max(1, (now - ytdStart) / MS_PER_DAY)) * 365;
@@ -768,4 +782,3 @@ async function loadServiceM8Data(tabKey) {
     console.error('[Dynasty] ServiceM8 fetch failed:', err);
   }
 }
-
