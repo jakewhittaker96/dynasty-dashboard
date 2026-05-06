@@ -75,10 +75,11 @@ function calcJobsRevenue(jobs) {
     const s = (j.date || '').substring(0, 10);
     return s ? new Date(s + 'T00:00:00') : null;
   };
-  // Cash-basis date: when payment was actually received (ServiceM8 `payment_date` field).
-  // Falls back to job date only if payment_date is missing on a paid job.
+  // Cash-basis date: when payment was actually received.
+  // ServiceM8 stamps `payment_received_stamp` (datetime) when payment is recorded.
+  // `payment_date` exists too but tracks invoice/due date, not cash-received date.
   const paymentDate = j => {
-    const raw = (j.payment_date || '').substring(0, 10);
+    const raw = (j.payment_received_stamp || '').substring(0, 10);
     if (raw && raw !== '0000-00-00') return new Date(raw + 'T00:00:00');
     return null;
   };
@@ -782,3 +783,4 @@ async function loadServiceM8Data(tabKey) {
     console.error('[Dynasty] ServiceM8 fetch failed:', err);
   }
 }
+Fix: use payment_received_stamp for cash basis
