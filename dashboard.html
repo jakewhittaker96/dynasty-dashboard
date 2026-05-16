@@ -414,6 +414,42 @@
 
       <section class="jobs-section">
 
+        <!-- Source toggle: My Jobs (localStorage) vs ServiceM8 vs combined -->
+        <div class="jobs-source-row">
+          <div class="jobs-source-toggle" id="jobsSourceToggle" role="group" aria-label="Job source">
+            <button class="jobs-source-btn jobs-source-btn--active" data-src="mine">My Jobs</button>
+            <button class="jobs-source-btn" data-src="sm8">ServiceM8 Jobs</button>
+            <button class="jobs-source-btn" data-src="all">All</button>
+          </div>
+          <button class="btn-quick-add" id="btnQuickAddJobs">+ Quick Add Job</button>
+        </div>
+
+        <!-- My Jobs (localStorage) table -->
+        <div id="myJobsWrap">
+          <div class="table-card jobs-table-card">
+            <div class="table-wrap">
+              <table class="data-table" id="myJobsTable">
+                <thead>
+                  <tr id="myJobsTableHead">
+                    <th>Client</th>
+                    <th>Address</th>
+                    <th>Job Type</th>
+                    <th>Quote</th>
+                    <th>Status</th>
+                    <th>Payment</th>
+                    <th>Created</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="myJobsTableBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- ServiceM8 wrap (existing) -->
+        <div id="sm8JobsWrap" hidden>
+
         <!-- Revenue summary cards (rows 1 & 2 only) -->
         <div class="jobs-revenue-grid" id="jobsRevenue"></div>
 
@@ -454,6 +490,8 @@
             </table>
           </div>
         </div>
+
+        </div><!-- /#sm8JobsWrap -->
 
       </section>
 
@@ -1172,6 +1210,7 @@
 
   <script src="app.js"></script>
   <script src="servicem8.js"></script>
+  <script src="myjobs.js"></script>
   <script src="builder.js"></script>
   <script src="subbies.js"></script>
   <script src="ai.js"></script>

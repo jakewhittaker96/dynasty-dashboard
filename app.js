@@ -691,12 +691,14 @@ function switchTab(siteKey) {
     renderAllJobs(currentBySite);
   } else if (siteKey === '__jobs__') {
     showOnly('jobs');
-    loadServiceM8Data('__jobs__');
+    if (typeof renderJobsSource === 'function') renderJobsSource();
+    else loadServiceM8Data('__jobs__');
   } else if (siteKey === '__pipeline__') {
     showOnly('pipeline');
-    loadServiceM8Data('__pipeline__');
+    if (window.MyJobs) window.MyJobs.renderPipeline();
   } else if (siteKey === '__finance__') {
     showOnly('finance');
+    if (window.MyJobs) window.MyJobs.renderFinanceSections();
     loadServiceM8Data('__finance__');
   } else if (siteKey === '__risk__') {
     showOnly('risk');
@@ -1141,6 +1143,97 @@ function renderAllMaterials(bySite) {
 }
 
 // ─── All Jobs overview ────────────────────────────────────────────────────────
+// Render localStorage jobs as site cards on the All Jobs tab (fallback when no
+// ServiceM8 data is loaded). Cards mirror the SM8 site-card markup so styling
+// is consistent. Clicking opens the Job Detail modal.
+function renderLocalJobsAsSiteCards(jobs) {
+  const STATUS_SLUG = {
+    'Quote Sent':       'quotes',
+    'Deposit Received': 'deposit',
+    'In Progress':      'progress',
+    'Invoice Sent':     'invoice',
+    'Paid':             'paid',
+    'Lost':             'lost',
+  };
+
+  // Overview KPIs: active jobs, deposits paid, invoices outstanding
+  const inProgress  = jobs.filter(j => j.status === 'In Progress').length;
+  const awaiting    = jobs.filter(j => j.status === 'Invoice Sent').length;
+  const depositsDue = jobs.filter(j => !j.depositPaid &&
+    (j.status === 'Deposit Received' || j.status === 'In Progress' ||
+     j.status === 'Invoice Sent')).length;
+
+  dom.ovTotalBricks.textContent   = jobs.length;
+  dom.ovTotalCrew.textContent     = inProgress;
+  dom.ovActiveSites.textContent   = jobs.length;
+  dom.ovTotalProblems.textContent = depositsDue + awaiting;
+  // Relabel KPIs for local-job mode
+  const lbl = document.getElementById('kpiLabelBricksOverview');
+  if (lbl) lbl.textContent = 'Total Jobs';
+  dom.ovProblemsCard.classList.toggle('has-problems', (depositsDue + awaiting) > 0);
+
+  const cards = jobs.map(j => {
+    const slug = STATUS_SLUG[j.status] || 'quotes';
+    return `
+      <div class="site-card site-card--local" data-job-id="${escHtml(j.id)}" role="button" tabindex="0"
+           aria-label="View ${escHtml(j.clientName)} details">
+        <div class="site-card-header">
+          <span class="site-card-name">${escHtml(j.clientName || '—')}</span>
+          <span class="site-card-badge job-card-badge--${slug}">${escHtml(j.status)}</span>
+        </div>
+        <div class="site-card-stats">
+          <div class="site-card-stat">
+            <div class="site-card-stat-value">${escHtml(j.jobType || '—')}</div>
+            <div class="site-card-stat-label">Job Type</div>
+          </div>
+          <div class="site-card-stat">
+            <div class="site-card-stat-value">${window.MyJobs.money(j.quoteAmount)}</div>
+            <div class="site-card-stat-label">Quote</div>
+          </div>
+          <div class="site-card-stat">
+            <div class="site-card-stat-value">${j.depositPaid ? '✓' : '—'}</div>
+            <div class="site-card-stat-label">Deposit</div>
+          </div>
+          <div class="site-card-stat">
+            <div class="site-card-stat-value">${j.balancePaid ? '✓' : '—'}</div>
+            <div class="site-card-stat-label">Balance</div>
+          </div>
+        </div>
+        ${j.jobAddress ? `<div class="site-card-done">&#128205; ${escHtml(j.jobAddress)}</div>` : ''}
+        ${j.notes ? `<div class="site-card-materials">${escHtml(j.notes.slice(0,140))}${j.notes.length>140?'…':''}</div>` : ''}
+      </div>`;
+  });
+
+  dom.siteCardsGrid.innerHTML = `
+    <div class="site-cards-grid-toolbar">
+      <span class="site-cards-grid-hint">Showing ${jobs.length} active job${jobs.length===1?'':'s'} from your database</span>
+      <button class="btn-quick-add" id="btnQuickAddAll">+ Quick Add Job</button>
+    </div>` + cards.join('');
+
+  // Hide SM8-specific sections that wouldn't have data
+  const trend = document.getElementById('weeklyTrendSection');
+  if (trend) trend.style.display = 'none';
+  const cc = document.getElementById('completionCountdown');
+  if (cc) cc.innerHTML = '';
+  const mats = document.getElementById('allMaterialsPanel');
+  if (mats) mats.innerHTML = '';
+  const ws = document.getElementById('weeklySummary');
+  if (ws) ws.innerHTML = '';
+  const ab = document.getElementById('alertsBanner');
+  if (ab) ab.innerHTML = '';
+
+  document.getElementById('btnQuickAddAll')?.addEventListener('click',
+    () => window.MyJobs.openQuickAddModal());
+
+  dom.siteCardsGrid.querySelectorAll('.site-card[data-job-id]').forEach(card => {
+    const open = () => window.MyJobs.openDetailModal(card.dataset.jobId);
+    card.addEventListener('click', open);
+    card.addEventListener('keydown', e => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); }
+    });
+  });
+}
+
 function renderAllJobs(bySite) {
   // Builder mode gets a clean card-only view
   if (isBuilder()) { renderBuilderView(bySite); return; }
@@ -1149,6 +1242,16 @@ function renderAllJobs(bySite) {
 
   // Split sites into active and completed
   const activeSites    = [...bySite.entries()].filter(([name]) => !completedSet.has(name));
+
+  // If no ServiceM8 site data is loaded but local jobs exist, render local jobs
+  // as site cards instead. Otherwise SM8 sites take precedence (existing flow).
+  if (activeSites.length === 0 && window.MyJobs) {
+    const localJobs = window.MyJobs.list().filter(j => j.status !== 'Lost' && j.status !== 'Paid');
+    if (localJobs.length > 0) {
+      renderLocalJobsAsSiteCards(localJobs);
+      return;
+    }
+  }
 
   let totalBricks   = 0;
   let totalCrew     = 0;

@@ -5231,3 +5231,434 @@ textarea.calc-input { resize: vertical; font-family: inherit; }
   border-color: #C9A84C;
   color: #fff;
 }
+
+/* ============================================================================
+   MY JOBS — built-in job database UI (kanban, finance breakdown, modals)
+   ============================================================================ */
+
+/* Status palette */
+:root {
+  --status-quotes:   #3B82F6; /* blue   — Quote Sent */
+  --status-deposit:  #C9A84C; /* gold   — Deposit Due */
+  --status-progress: #22C55E; /* green  — In Progress */
+  --status-invoice:  #F59E0B; /* orange — Invoice Sent */
+  --status-paid:     #888888; /* grey   — Paid */
+  --status-lost:     #EF4444; /* red    — Lost */
+}
+
+.myjobs-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin: 1.25rem 0 0.75rem;
+}
+.myjobs-empty {
+  text-align: center;
+  color: var(--text-muted);
+  padding: 2rem 1rem;
+  border: 1px dashed var(--border-dim);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  font-size: 0.9rem;
+}
+
+/* ── Kanban board ── */
+.kanban-board {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(220px, 1fr));
+  gap: 0.75rem;
+  margin-top: 1rem;
+  overflow-x: auto;
+  padding-bottom: 0.5rem;
+}
+.kanban-col {
+  background: var(--surface);
+  border: 1px solid var(--border-dim);
+  border-top: 3px solid var(--col-color, var(--gold));
+  border-radius: var(--radius-sm);
+  padding: 0.75rem;
+  min-height: 320px;
+}
+.kanban-col--quotes   { --col-color: var(--status-quotes); }
+.kanban-col--deposit  { --col-color: var(--status-deposit); }
+.kanban-col--progress { --col-color: var(--status-progress); }
+.kanban-col--invoice  { --col-color: var(--status-invoice); }
+.kanban-col--paid     { --col-color: var(--status-paid); }
+.kanban-col--lost     { --col-color: var(--status-lost); }
+
+.kanban-col-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--border-dim);
+}
+.kanban-col-title {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--col-color);
+}
+.kanban-col-count {
+  background: rgba(255,255,255,0.06);
+  color: var(--text-muted);
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+}
+.kanban-col-body { display: flex; flex-direction: column; gap: 0.5rem; }
+.kanban-empty {
+  text-align: center;
+  color: var(--text-dim);
+  font-size: 0.78rem;
+  padding: 1.25rem 0.5rem;
+  border: 1px dashed var(--border-dim);
+  border-radius: var(--radius-sm);
+}
+
+/* Job card */
+.job-card {
+  background: var(--surface-2);
+  border: 1px solid var(--border-dim);
+  border-left: 3px solid var(--col-color, var(--gold));
+  border-radius: var(--radius-sm);
+  padding: 0.7rem 0.75rem;
+  cursor: pointer;
+  transition: transform 0.12s, border-color 0.12s, background 0.12s;
+}
+.job-card:hover {
+  background: var(--surface-3);
+  border-color: var(--col-color, var(--gold));
+  transform: translateY(-1px);
+}
+.job-card--quotes   { --col-color: var(--status-quotes); }
+.job-card--deposit  { --col-color: var(--status-deposit); }
+.job-card--progress { --col-color: var(--status-progress); }
+.job-card--invoice  { --col-color: var(--status-invoice); }
+.job-card--paid     { --col-color: var(--status-paid); }
+.job-card--lost     { --col-color: var(--status-lost); }
+
+.job-card-name {
+  font-weight: 700;
+  font-size: 0.92rem;
+  color: var(--text);
+  margin-bottom: 0.25rem;
+}
+.job-card-meta {
+  font-size: 0.76rem;
+  color: var(--text-muted);
+  line-height: 1.35;
+  word-break: break-word;
+}
+.job-card-meta--type {
+  font-size: 0.72rem;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-top: 0.25rem;
+}
+.job-card-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 0.6rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--border-dim);
+}
+.job-card-amount {
+  font-weight: 700;
+  font-size: 0.88rem;
+  color: var(--gold);
+}
+.job-card-badge {
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 0.18rem 0.45rem;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.06);
+  text-transform: uppercase;
+}
+.job-card-badge--quotes   { background: rgba(59,130,246,0.15);  color: var(--status-quotes); }
+.job-card-badge--deposit  { background: rgba(201,168,76,0.15);  color: var(--status-deposit); }
+.job-card-badge--progress { background: rgba(34,197,94,0.15);   color: var(--status-progress); }
+.job-card-badge--invoice  { background: rgba(245,158,11,0.15);  color: var(--status-invoice); }
+.job-card-badge--paid     { background: rgba(255,255,255,0.06); color: var(--status-paid); }
+.job-card-badge--lost     { background: rgba(239,68,68,0.15);   color: var(--status-lost); }
+
+/* ── Quick Add button ── */
+.btn-quick-add {
+  background: linear-gradient(135deg, var(--gold), var(--gold-dim));
+  color: #1a1300;
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 0.55rem 1.1rem;
+  font-weight: 700;
+  font-size: 0.82rem;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  box-shadow: 0 4px 16px rgba(201,168,76,0.25);
+  transition: transform 0.12s, box-shadow 0.12s;
+}
+.btn-quick-add:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(201,168,76,0.35);
+}
+
+/* ── Finance: Money Owed sections ── */
+.owed-summary {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+}
+@media (max-width: 720px) {
+  .owed-summary { grid-template-columns: 1fr; }
+}
+.owed-summary-card {
+  background: var(--surface);
+  border: 1px solid var(--border-dim);
+  border-radius: var(--radius-sm);
+  padding: 1rem 1.25rem;
+  border-left: 3px solid var(--gold);
+}
+.owed-summary-card--deposit { border-left-color: var(--status-deposit); }
+.owed-summary-card--invoice { border-left-color: var(--status-invoice); }
+.owed-summary-card--total   { border-left-color: var(--gold); background: linear-gradient(135deg, rgba(201,168,76,0.08), transparent); }
+
+.owed-summary-label {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 0.25rem;
+}
+.owed-summary-value {
+  font-size: 1.6rem;
+  font-weight: 800;
+  color: var(--text);
+}
+.owed-summary-sub {
+  font-size: 0.74rem;
+  color: var(--text-muted);
+  margin-top: 0.25rem;
+}
+
+.myjobs-owed-section { margin-bottom: 1.5rem; }
+.myjobs-owed-title {
+  font-size: 0.84rem;
+  font-weight: 700;
+  color: var(--gold);
+  margin-bottom: 0.5rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.myjobs-table-card {
+  background: var(--surface);
+  border: 1px solid var(--border-dim);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+.myjobs-table-total {
+  padding: 0.6rem 1rem;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border-dim);
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+.myjobs-table-total strong { color: var(--gold); font-weight: 700; }
+.myjobs-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.84rem;
+}
+.myjobs-table thead th {
+  text-align: left;
+  padding: 0.6rem 1rem;
+  background: var(--surface-2);
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-bottom: 1px solid var(--border-dim);
+  font-weight: 600;
+}
+.myjobs-table tbody td {
+  padding: 0.65rem 1rem;
+  border-bottom: 1px solid var(--border-dim);
+  color: var(--text);
+}
+.myjobs-table tbody tr:last-child td { border-bottom: none; }
+.myjobs-table tbody tr.myjobs-row { cursor: pointer; transition: background 0.12s; }
+.myjobs-table tbody tr.myjobs-row:hover { background: var(--surface-2); }
+
+/* Chase button */
+.chase-btn {
+  background: rgba(239,68,68,0.12);
+  color: var(--red);
+  border: 1px solid rgba(239,68,68,0.25);
+  border-radius: 6px;
+  padding: 0.32rem 0.75rem;
+  font-size: 0.76rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+  white-space: nowrap;
+}
+.chase-btn:hover { background: rgba(239,68,68,0.22); }
+.chase-btn--done {
+  background: rgba(34,197,94,0.18);
+  color: var(--green);
+  border-color: rgba(34,197,94,0.35);
+}
+
+.myjobs-row-btn {
+  background: transparent;
+  color: var(--gold);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.3rem 0.7rem;
+  font-size: 0.76rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+.myjobs-row-btn:hover { background: var(--gold-glow-s); }
+
+.status-badge {
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 0.18rem 0.5rem;
+  border-radius: 999px;
+  text-transform: uppercase;
+  white-space: nowrap;
+  display: inline-block;
+}
+.status-badge--quotes   { background: rgba(59,130,246,0.15);  color: var(--status-quotes); }
+.status-badge--deposit  { background: rgba(201,168,76,0.15);  color: var(--status-deposit); }
+.status-badge--progress { background: rgba(34,197,94,0.15);   color: var(--status-progress); }
+.status-badge--invoice  { background: rgba(245,158,11,0.15);  color: var(--status-invoice); }
+.status-badge--paid     { background: rgba(255,255,255,0.06); color: var(--status-paid); }
+.status-badge--lost     { background: rgba(239,68,68,0.15);   color: var(--status-lost); }
+
+.paid-pip {
+  display: inline-block;
+  font-size: 0.68rem;
+  color: var(--green);
+  background: rgba(34,197,94,0.10);
+  border: 1px solid rgba(34,197,94,0.25);
+  border-radius: 4px;
+  padding: 0.1rem 0.4rem;
+  margin-right: 0.25rem;
+}
+.src-pill {
+  display: inline-block;
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 0.14rem 0.45rem;
+  border-radius: 4px;
+}
+.src-pill--mine { background: rgba(201,168,76,0.15); color: var(--gold); }
+.src-pill--sm8  { background: rgba(59,130,246,0.15); color: var(--status-quotes); }
+
+/* ── Jobs tab source toggle ── */
+.jobs-source-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+.jobs-source-toggle {
+  display: inline-flex;
+  background: var(--surface);
+  border: 1px solid var(--border-dim);
+  border-radius: 8px;
+  padding: 3px;
+  gap: 2px;
+}
+.jobs-source-btn {
+  background: transparent;
+  color: var(--text-muted);
+  border: none;
+  padding: 0.45rem 0.95rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: background 0.12s, color 0.12s;
+}
+.jobs-source-btn:hover { color: var(--text); }
+.jobs-source-btn--active {
+  background: var(--gold-glow-s);
+  color: var(--gold);
+}
+
+/* ── Job Detail modal grid ── */
+.jd-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.85rem 1.25rem;
+}
+@media (max-width: 720px) {
+  .jd-grid { grid-template-columns: 1fr; }
+}
+.jd-row-full { grid-column: 1 / -1; }
+.jd-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  color: var(--text);
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding-top: 1.5rem;
+}
+.jd-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-top: 1.25rem;
+  flex-wrap: wrap;
+}
+.jd-delete-btn {
+  background: transparent;
+  color: var(--red);
+  border: 1px solid rgba(239,68,68,0.35);
+  border-radius: 8px;
+  padding: 0.55rem 1.1rem;
+  font-weight: 600;
+  font-size: 0.82rem;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+.jd-delete-btn:hover { background: rgba(239,68,68,0.12); }
+
+/* Local-job site cards (All Jobs fallback view) */
+.site-cards-grid-toolbar {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+.site-cards-grid-hint {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+/* Responsive kanban — let it scroll on narrow screens */
+@media (max-width: 1100px) {
+  .kanban-board { grid-template-columns: repeat(6, 240px); }
+}
