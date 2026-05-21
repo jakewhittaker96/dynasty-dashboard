@@ -53,13 +53,24 @@ function sumAmount(jobs) {
 }
 
 // ─── Shared revenue data calculator ──────────────────────────────────────────
+// A job counts as "invoiced" when it has reached Work Order or Completed status.
+// Quote-status jobs are explicitly excluded from unpaid totals, invoiced-month
+// figures, and projected-revenue sums (they haven't been invoiced yet).
+function isInvoiceable(j) {
+  return j.status === 'Work Order' || j.status === 'Completed';
+}
+
 function calcJobsRevenue(jobs) {
   const total       = sumAmount(jobs);
   const completed   = sumAmount(jobs.filter(j => j.status === 'Completed'));
   const quoted      = sumAmount(jobs.filter(j => j.status === 'Quote'));
   const outstanding = sumAmount(jobs.filter(j => j.status === 'Work Order'));
   const paid        = sumAmount(jobs.filter(j => isPaid(j)));
-  const unpaid      = sumAmount(jobs.filter(j => !isPaid(j) && parseFloat(j.total_invoice_amount || 0) > 0));
+  // Unpaid = invoiced jobs (Work Order or Completed) with no payment received.
+  // Quote-status jobs are NOT invoiced yet so cannot be "unpaid".
+  const unpaidJobs  = jobs.filter(j =>
+    isInvoiceable(j) && !isPaid(j) && parseFloat(j.total_invoice_amount || 0) > 0);
+  const unpaid      = sumAmount(unpaidJobs);
 
   const now  = new Date();
   const yr   = now.getFullYear();
@@ -69,38 +80,47 @@ function calcJobsRevenue(jobs) {
   const lastMonthStart = new Date(yr, mo - 1, 1);
   const lastMonthEnd   = thisMonthStart;
   const ytdStart       = new Date(yr, 0, 1);
+  const ytdEnd         = new Date(yr + 1, 0, 1);
   const fyStart        = now >= new Date(yr, 6, 1) ? new Date(yr, 6, 1) : new Date(yr - 1, 6, 1);
+  const fyEnd          = new Date(fyStart.getFullYear() + 1, 6, 1);
 
+  // Invoice date = ServiceM8 `date` field on the job (job/invoice date).
   const jobDate = j => {
     const s = (j.date || '').substring(0, 10);
     return s ? new Date(s + 'T00:00:00') : null;
   };
-  // Cash-basis date: when payment was actually received.
-  // ServiceM8 stamps `payment_received_stamp` (datetime) when payment is recorded.
-  // `payment_date` exists too but tracks invoice/due date, not cash-received date.
-  const paymentDate = j => {
-    const raw = (j.payment_received_stamp || '').substring(0, 10);
-    if (raw && raw !== '0000-00-00') return new Date(raw + 'T00:00:00');
-    return null;
-  };
-
-  const doneJobs = jobs.filter(j => j.status === 'Completed');
-  const paidJobs = jobs.filter(j => isPaid(j) && paymentDate(j));
-  const inRange  = (j, start, end) => { const d = jobDate(j); return d && d >= start && (!end || d < end); };
-  const inPayRange = (j, start, end) => {
-    const d = paymentDate(j);
+  const inRange = (j, start, end) => {
+    const d = jobDate(j);
     return d && d >= start && (!end || d < end);
   };
 
-  // Cash-basis tiles — driven by payment_date, not job creation date.
-  const thisMonth = sumAmount(paidJobs.filter(j => inPayRange(j, thisMonthStart)));
-  const lastMonth = sumAmount(paidJobs.filter(j => inPayRange(j, lastMonthStart, lastMonthEnd)));
-  const ytd       = sumAmount(paidJobs.filter(j => inPayRange(j, ytdStart)));
-  const fytd      = sumAmount(paidJobs.filter(j => inPayRange(j, fyStart)));
+  // Invoiced jobs only (W.O. or Completed) — Quotes don't count as invoiced.
+  const invoicedJobs = jobs.filter(isInvoiceable);
 
-  const MS_PER_DAY = 1000 * 60 * 60 * 24;
-  const projYTD    = (ytd  / Math.max(1, (now - ytdStart) / MS_PER_DAY)) * 365;
-  const projFYTD   = (fytd / Math.max(1, (now - fyStart)  / MS_PER_DAY)) * 365;
+  // Accrual-basis tiles — driven by invoice/job date, not payment-received date.
+  // Includes jobs invoiced today (no payment_received_stamp lag).
+  const thisMonthJobs = invoicedJobs.filter(j => inRange(j, thisMonthStart));
+  const lastMonthJobs = invoicedJobs.filter(j => inRange(j, lastMonthStart, lastMonthEnd));
+  const ytdJobs       = invoicedJobs.filter(j => inRange(j, ytdStart, ytdEnd));
+  const fytdJobs      = invoicedJobs.filter(j => inRange(j, fyStart, fyEnd));
+
+  const thisMonth = sumAmount(thisMonthJobs);
+  const lastMonth = sumAmount(lastMonthJobs);
+  const ytd       = sumAmount(ytdJobs);
+  const fytd      = sumAmount(fytdJobs);
+
+  // Projected = total invoiced YTD for the calendar / financial year.
+  // Recalculated on every render — not a pace extrapolation, just the running
+  // sum of W.O. + Completed jobs dated within the period.
+  const projYTD  = ytd;
+  const projFYTD = fytd;
+
+  console.log('[Dynasty] calcJobsRevenue:',
+    `invoiced jobs total=${invoicedJobs.length}`,
+    `this month=${thisMonthJobs.length} ($${thisMonth.toFixed(2)})`,
+    `YTD ${yr}=${ytdJobs.length} ($${ytd.toFixed(2)})`,
+    `FY=${fytdJobs.length} ($${fytd.toFixed(2)})`,
+    `unpaid=${unpaidJobs.length} ($${unpaid.toFixed(2)})`);
 
   const yrLabel  = String(yr);
   const fyEndYr  = fyStart.getFullYear() + 1;
@@ -186,8 +206,8 @@ function renderPipelineTabContent() {
   const { projYTD, projFYTD, yrLabel, fyLabel } = calcJobsRevenue(bizJobs);
 
   dom.pipelineProjected.innerHTML =
-    revenueCard(projYTD,  `${yrLabel} Projected`, 'jobs-revenue-value--projected', 'based on current pace', 'jobs-revenue-card--projected') +
-    revenueCard(projFYTD, `${fyLabel} Projected`, 'jobs-revenue-value--projected', 'based on current pace', 'jobs-revenue-card--projected');
+    revenueCard(projYTD,  `${yrLabel} Projected`, 'jobs-revenue-value--projected', 'invoiced to date', 'jobs-revenue-card--projected') +
+    revenueCard(projFYTD, `${fyLabel} Projected`, 'jobs-revenue-value--projected', 'invoiced to date', 'jobs-revenue-card--projected');
 
   renderJobsConversion(bizJobs, dom.pipelineConversion);
   renderJobsOverdue(bizJobs, dom.pipelineOverdue);
@@ -200,8 +220,8 @@ function renderFinanceTabContent() {
   const { projYTD, projFYTD, yrLabel, fyLabel } = calcJobsRevenue(bizJobs);
 
   dom.financeProjected.innerHTML =
-    revenueCard(projYTD,  `${yrLabel} Projected`, 'jobs-revenue-value--projected', 'based on current pace', 'jobs-revenue-card--projected') +
-    revenueCard(projFYTD, `${fyLabel} Projected`, 'jobs-revenue-value--projected', 'based on current pace', 'jobs-revenue-card--projected');
+    revenueCard(projYTD,  `${yrLabel} Projected`, 'jobs-revenue-value--projected', 'invoiced to date', 'jobs-revenue-card--projected') +
+    revenueCard(projFYTD, `${fyLabel} Projected`, 'jobs-revenue-value--projected', 'invoiced to date', 'jobs-revenue-card--projected');
 
   renderRevenueChart(bizJobs);
   renderTopClients(bizJobs);
@@ -578,9 +598,12 @@ function applyJobsFilters() {
     const rawDate   = (job.date || '').substring(0, 10);
     const dateStr   = rawDate ? rawDate.split('-').reverse().join('/') : '—';
     const paid      = isPaid(job);
-    const payBadge  = paid
-      ? '<span class="payment-badge payment-badge--paid">Paid</span>'
-      : '<span class="payment-badge payment-badge--unpaid">Unpaid</span>';
+    // Quote-status jobs aren't invoiced yet, so don't tag them Unpaid.
+    const payBadge  = !isInvoiceable(job)
+      ? '<span class="payment-badge">—</span>'
+      : paid
+        ? '<span class="payment-badge payment-badge--paid">Paid</span>'
+        : '<span class="payment-badge payment-badge--unpaid">Unpaid</span>';
 
     // Chase button cell
     let chaseTd = '<td class="jobs-col-chase"></td>';
@@ -668,7 +691,7 @@ function exportCSV() {
     const status  = job.status || '';
     const amount  = parseFloat(job.total_invoice_amount || 0);
     const dateStr = (job.date || '').substring(0, 10).split('-').reverse().join('/');
-    const paid    = isPaid(job) ? 'Paid' : 'Unpaid';
+    const paid    = !isInvoiceable(job) ? '' : (isPaid(job) ? 'Paid' : 'Unpaid');
     const row = [desc, client, address, status, amount > 0 ? amount.toFixed(2) : '', paid, dateStr];
     if (showProfit) {
       const hours  = profitMap ? (profitMap.get(job.uuid) || 0) : 0;
@@ -695,8 +718,16 @@ function renderSM8Tab(tabKey) {
   else if (tabKey === '__finance__')  renderFinanceTabContent();
 }
 
-async function loadServiceM8Data(tabKey) {
-  if (jobsLoaded) {
+// Time-based cache so recently-invoiced jobs (last few days) don't get hidden
+// behind a long-lived in-memory snapshot. After JOBS_CACHE_TTL_MS we refetch
+// on the next Jobs/Finance tab activation.
+const JOBS_CACHE_TTL_MS = 60 * 1000;
+
+async function loadServiceM8Data(tabKey, opts = {}) {
+  const force   = opts.force === true;
+  const fresh   = jobsLoaded
+    && (Date.now() - (window._sm8JobsLoadedAt || 0)) < JOBS_CACHE_TTL_MS;
+  if (!force && fresh) {
     renderSM8Tab(tabKey);
     return;
   }
@@ -769,6 +800,8 @@ async function loadServiceM8Data(tabKey) {
       .sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
 
     jobsLoaded = true;
+    window._sm8JobsLoadedAt = Date.now();
+    console.log(`[Dynasty] SM8 jobs fetched: ${activeJobsData.length} active jobs at ${new Date().toISOString()}`);
     updateTabBadges(filterByBiz(activeJobsData));
     renderSM8Tab(tabKey);
 
