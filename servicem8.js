@@ -96,6 +96,8 @@ function calcJobsRevenue(jobs) {
 
   // Invoiced jobs only (W.O. or Completed) — Quotes don't count as invoiced.
   const invoicedJobs = jobs.filter(isInvoiceable);
+  // Completed-only subset — used below for FY material/labour revenue tally.
+  const doneJobs     = jobs.filter(j => j.status === 'Completed');
 
   // Accrual-basis tiles — driven by invoice/job date, not payment-received date.
   // Includes jobs invoiced today (no payment_received_stamp lag).
